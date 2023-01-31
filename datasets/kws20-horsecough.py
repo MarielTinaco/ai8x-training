@@ -67,48 +67,13 @@ class KWS:
     url = 'http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz'
     fs = 16000
 
-    class_dict = {
-        "backward": 0,
-        "bed": 1,
-        "bird": 2,
-        "blinds": 3,
-        "cat": 4,
-        "dash": 5,
-        "dog": 6,
-        "down": 7,
-        "eight": 8,
-        "energy": 9,
-        "five": 10,
-        "follow": 11,
-        "forward": 12,
-        "four": 13,
-        "go": 14,
-        "happy": 15,
-        "house": 16,
-        "learn": 17,
-        "left": 18,
-        "lights": 19,
-        "marvin": 20,
-        "nine": 21,
-        "no": 22,
-        "off": 23,
-        "on": 24,
-        "one": 25,
-        "right": 26,
-        "seven": 27,
-        "sheila": 28,
-        "six": 29,
-        "stop": 30,
-        "three": 31,
-        "tree": 32,
-        "two": 33,
-        "up": 34,
-        "visual": 35,
-        "wow": 36,
-        "yes": 37,
-        "zero": 38
-    }
-    
+    class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3, 'dog': 4, 'down': 5,
+                  'eight': 6, 'five': 7, 'follow': 8, 'forward': 9, 'four': 10, 'go': 11,
+                  'happy': 12, 'horse_cough': 13, 'house': 14, 'learn': 15, 'left': 16, 'marvin': 17, 'nine': 18,
+                  'no': 19, 'off': 20, 'on': 21, 'one': 22, 'right': 23, 'seven': 24,
+                  'sheila': 25, 'six': 26, 'stop': 27, 'three': 28, 'tree': 29, 'two': 30,
+                  'up': 31, 'visual': 32, 'wow': 33, 'yes': 34, 'zero': 35}
+
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
                  augmentation=None, download=False, save_unquantized=False):
 
@@ -128,7 +93,7 @@ class KWS:
             self.data_file = 'unquantized.pt'
 
         if download:
-            self._download()
+            self.__download()
 
         self.data, self.targets, self.data_type = torch.load(os.path.join(
             self.processed_folder, self.data_file))
@@ -186,24 +151,24 @@ class KWS:
                           'Using defaults: [Min: 0.8, Max: 1.3]')
                     self.augmentation['strech'] = {'min': 0.8, 'max': 1.3}
 
-    def _download(self):
+    def __download(self):
 
-        if self._check_exists():
+        if self.__check_exists():
             return
 
-        self._makedir_exist_ok(self.raw_folder)
-        self._makedir_exist_ok(self.processed_folder)
+        self.__makedir_exist_ok(self.raw_folder)
+        self.__makedir_exist_ok(self.processed_folder)
 
         filename = self.url.rpartition('/')[2]
         self.__download_and_extract_archive(self.url, download_root=self.raw_folder,
                                             filename=filename)
 
-        self._gen_datasets()
+        self.__gen_datasets()
 
-    def _check_exists(self):
+    def __check_exists(self):
         return os.path.exists(os.path.join(self.processed_folder, self.data_file))
 
-    def _makedir_exist_ok(self, dirpath):  # pylint: disable=no-self-use
+    def __makedir_exist_ok(self, dirpath):
         try:
             os.makedirs(dirpath)
         except OSError as e:
@@ -212,7 +177,7 @@ class KWS:
             else:
                 raise
 
-    def __gen_bar_updater(self):  # pylint: disable=no-self-use
+    def __gen_bar_updater(self):
         pbar = tqdm(total=None)
 
         def bar_update(count, block_size, total_size):
@@ -247,7 +212,7 @@ class KWS:
                 else:
                     raise e
 
-    def __calculate_md5(self, fpath, chunk_size=1024 * 1024):  # pylint: disable=no-self-use
+    def __calculate_md5(self, fpath, chunk_size=1024 * 1024):
         md5 = hashlib.md5()
         with open(fpath, 'rb') as f:
             for chunk in iter(lambda: f.read(chunk_size), b''):
@@ -264,7 +229,7 @@ class KWS:
             return True
         return self.__check_md5(fpath, md5)
 
-    def __extract_archive(self, from_path,  # pylint: disable=no-self-use
+    def __extract_archive(self, from_path,
                           to_path=None, remove_finished=False):
         if to_path is None:
             to_path = os.path.dirname(from_path)
@@ -418,7 +383,7 @@ class KWS:
             q_data = np.clip(q_data, 0, max_val)
         return np.uint8(q_data)
 
-    def _gen_datasets(self, exp_len=16384, row_len=128, overlap_ratio=0):
+    def __gen_datasets(self, exp_len=16384, row_len=128, overlap_ratio=0):
         print('Generating dataset from raw data samples for the first time. ')
         print('This process will take significant time (~60 minutes)...')
         with warnings.catch_warnings():
@@ -507,9 +472,9 @@ class KWS:
                     data_class_all = data_class.copy()
                     data_type_all = data_type.copy()
                 else:
-                    data_in_all = np.concatenate((data_in_all, data_in), axis=0)
-                    data_class_all = np.concatenate((data_class_all, data_class), axis=0)
-                    data_type_all = np.concatenate((data_type_all, data_type), axis=0)
+                    data_in_all = np.concatenate((data_in_all, data_in), axis=0, dtype='uint8')
+                    data_class_all = np.concatenate((data_class_all, data_class), axis=0, dtype='uint8')
+                    data_type_all = np.concatenate((data_type_all, data_type), axis=0, dtype='uint8')
                 dur = time.time() - time_s
                 print(f'Data concatenation finished in {dur:.3f} seconds.')
 
@@ -533,17 +498,12 @@ class KWS_20(KWS):
     def __str__(self):
         return self.__class__.__name__
 
-class KWS_DASH(KWS):
+class KWS_EQUINE(KWS):
 
     class_dict = {
-        "blinds": 0,
-        "dash": 1,
-        "down": 2,
-        "energy": 3,
-        "lights": 4,
-        "off": 5,
-        "on": 6,
-        "up": 7,
+        "horse_cough" : 0,
+        "horse_neigh" : 1,
+        "human_cough" : 2
     }
     def __str__(self):
         return self.__class__.__name__
@@ -557,7 +517,6 @@ class KWS_DASH(KWS):
         self._makedir_exist_ok(self.processed_folder)
 
         self._gen_datasets()
-
 
 def KWS_get_datasets(data, load_train=True, load_test=True, num_classes=6):
     """
@@ -581,7 +540,7 @@ def KWS_get_datasets(data, load_train=True, load_test=True, num_classes=6):
         ai8x.normalize(args=args)
     ])
 
-    if num_classes in (6, 8, 20):
+    if num_classes in (1, 3, 6, 20, 21, 36):
         classes = next((e for _, e in enumerate(datasets)
                         if len(e['output']) - 1 == num_classes))['output'][:-1]
     else:
@@ -630,8 +589,7 @@ def KWS_20_get_datasets(data, load_train=True, load_test=True):
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=20)
 
-
-def KWS_dash_get_datasets(data, load_train=True, load_test=True):
+def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     """
     Load the folded 1D version of SpeechCom dataset for 20 classes
 
@@ -647,7 +605,12 @@ def KWS_dash_get_datasets(data, load_train=True, load_test=True):
     the stretching coefficient, shift amount and noise variance are randomly selected between
     0.8 and 1.3, -0.1 and 0.1, 0 and 1, respectively.
     """
-    return KWS_get_datasets(data, load_train, load_test, num_classes=8)
+    return KWS_get_datasets(data, load_train, load_test, num_classes=36)
+#     return KWS_get_datasets(data, load_train, load_test, num_classes=1)
+
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
+    return KWS_get_datasets(data, load_train, load_test, num_classes=3)
+
 
 def KWS_get_unquantized_datasets(data, load_train=True, load_test=True, num_classes=6):
     """
@@ -698,79 +661,34 @@ def KWS_35_get_unquantized_datasets(data, load_train=True, load_test=True):
     return KWS_get_unquantized_datasets(data, load_train, load_test, num_classes=35)
 
 
-
-def KWS_DASH_get_datasets(data, load_train=True, load_test=True):
-    """
-    Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
-    """
-    (data_dir, act_mode_8bit) = data
-
-    transform = transforms.Compose([
-        ai8x.normalize(act_mode_8bit=act_mode_8bit)
-    ])
-
-    for ds in datasets:
-        if ds['name'] == 'KWS_DASH':
-            classes = ds['output']
-
-    augmentation = {'aug_num': 2}
-    quantization_scheme = {'compand': False, 'mu': 10}
-
-    if load_train:
-        train_dataset = KWS_DASH(root=data_dir, classes=classes, d_type='train',
-                            transform=transform, t_type='keyword',
-                            quantization_scheme=quantization_scheme,
-                            augmentation=augmentation, download=True)
-    else:
-        train_dataset = None
-
-    if load_test:
-        test_dataset = KWS_DASH(root=data_dir, classes=classes, d_type='test',
-                           transform=transform, t_type='keyword',
-                           quantization_scheme=quantization_scheme,
-                           augmentation=augmentation, download=True)
-
-    else:
-        test_dataset = None
-
-    return train_dataset, test_dataset
-
-
 datasets = [
     {
-        'name': 'KWS',  # 6 keywords
-        'input': (512, 64),
-        'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'UNKNOWN'),
-        'weight': (1, 1, 1, 1, 1, 1, 0.06),
-        'loader': KWS_get_datasets,
-    },
-    {
-        'name': 'KWS_20',  # 20 keywords
+        'name': 'KWS_20_horsecough',  # 20 keywords
         'input': (128, 128),
         'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
-                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero',
+                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero', 
+                   'sheila', 'marvin', 'visual', 'learn', 'house', 'happy', 'tree', 'forward',
+                   'follow', 'dog', 'cat', 'bird', 'bed', 'backward', 'wow', 'horse_cough',
                    'UNKNOWN'),
-        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
-        'loader': KWS_20_get_datasets,
+        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
+        'loader': KWS_HORSE_get_datasets,
     },
     {
-        'name': 'KWS_35_unquantized',  # 35 keywords (no unknown)
+        'name': 'KWS_horsecough_tf',  # 20 keywords
         'input': (128, 128),
-        'output': ('backward', 'bed', 'bird', 'cat', 'dog', 'down',
-                   'eight', 'five', 'follow', 'forward', 'four', 'go',
-                   'happy', 'house', 'learn', 'left', 'marvin', 'nine',
-                   'no', 'off', 'on', 'one', 'right', 'seven',
-                   'sheila', 'six', 'stop', 'three', 'tree', 'two',
-                   'up', 'visual', 'wow', 'yes', 'zero'),
-        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
-        'loader': KWS_35_get_unquantized_datasets,
-    },
-    {
-        'name': 'KWS_DASH',  # 8 keywords
-        'input': (128, 128),
-        'output': ('blinds', 'dash', 'down', 'energy', 'lights', 'off', 'on', 'up'),
-        'weight': (1, 1, 0.01, 1, 1, 0.01, 0.01, 0.01),
-        'loader': KWS_DASH_get_datasets,
+        'output': ('horse_cough', 'horse_neigh', 'human_cough', 'UNKNOWN'),
+        'weight': (1, 1, 1, 0.14),
+        'loader': KWS_HORSE_TF_get_datasets,
     },
 ]
+
+
+# datasets = [
+#     {
+#         'name': 'KWS_20_horsecough',  # 20 keywords
+#         'input': (128, 128),
+#         'output': ('horse_cough','UNKNOWN'),
+#         'weight': (1, 0.01),
+#         'loader': KWS_HORSE_get_datasets,
+#     },
+# ]
