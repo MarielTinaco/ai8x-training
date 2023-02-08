@@ -22,7 +22,7 @@ class AI85KWS20Netv3(nn.Module):
     # num_classes = n keywords + 1 unknown
     def __init__(
             self,
-            num_classes=22,
+            num_classes=38,
             num_channels=128,
             dimensions=(128, 1),  # pylint: disable=unused-argument
             bias=False,
