@@ -22,18 +22,29 @@ import devices
 dev = None
 
 
+# class normalize:
+#     """
+#     Normalize input to either [-128/128, +127/128] or [-128, +127]
+#     """
+#     def __init__(self, args):
+#         self.args = args
+
+#     def __call__(self, img):
+#         if self.args.act_mode_8bit:
+#             return img.sub(0.5).mul(256.).round().clamp(min=-128, max=127)
+#         return img.sub(0.5).mul(256.).round().clamp(min=-128, max=127).div(128.)
+
 class normalize:
     """
     Normalize input to either [-128/128, +127/128] or [-128, +127]
     """
-    def __init__(self, args):
-        self.args = args
+    def __init__(self, **kwargs):
+        self.act_mode_8bit = kwargs.get('act_mode_8bit', False)
 
     def __call__(self, img):
-        if self.args.act_mode_8bit:
+        if self.act_mode_8bit:
             return img.sub(0.5).mul(256.).round().clamp(min=-128, max=127)
         return img.sub(0.5).mul(256.).round().clamp(min=-128, max=127).div(128.)
-
 
 class fold:
     """

@@ -69,10 +69,10 @@ class KWS:
 
     class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3, 'dog': 4, 'down': 5,
                   'eight': 6, 'five': 7, 'follow': 8, 'forward': 9, 'four': 10, 'go': 11,
-                  'happy': 12, 'horse_cough': 13, 'house': 14, 'learn': 15, 'left': 16, 'marvin': 17, 'nine': 18,
-                  'no': 19, 'off': 20, 'on': 21, 'one': 22, 'right': 23, 'seven': 24,
-                  'sheila': 25, 'six': 26, 'stop': 27, 'three': 28, 'tree': 29, 'two': 30,
-                  'up': 31, 'visual': 32, 'wow': 33, 'yes': 34, 'zero': 35}
+                  'happy': 12, 'horse_cough': 13, 'horse_neigh': 14, 'house': 15, 'human_cough' : 16, 
+                  'learn': 17, 'left': 18, 'marvin': 19, 'nine': 20, 'no': 21, 'off': 22, 'on': 23, 
+                  'one': 24, 'right': 25, 'seven': 26, 'sheila': 27, 'six': 28, 'stop': 29, 'three': 30, 
+                  'tree': 31, 'two': 32, 'up': 33, 'visual': 34, 'wow': 35, 'yes': 36, 'zero': 37}
 
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
                  augmentation=None, download=False, save_unquantized=False):
@@ -159,9 +159,9 @@ class KWS:
         self.__makedir_exist_ok(self.raw_folder)
         self.__makedir_exist_ok(self.processed_folder)
 
-        filename = self.url.rpartition('/')[2]
-        self.__download_and_extract_archive(self.url, download_root=self.raw_folder,
-                                            filename=filename)
+        # filename = self.url.rpartition('/')[2]
+        # self.__download_and_extract_archive(self.url, download_root=self.raw_folder,
+        #                                     filename=filename)
 
         self.__gen_datasets()
 
@@ -608,9 +608,46 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 #     return KWS_get_datasets(data, load_train, load_test, num_classes=1)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
-    return KWS_get_datasets(data, load_train, load_test, num_classes=3)
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=3):
+    # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
+    """
+    Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
+    """
+    (data_dir, args) = data
 
+    transform = transforms.Compose([
+        ai8x.normalize(act_mode_8bit=args)
+    ])
+
+    if num_classes in (1, 3, 6, 20, 21, 36):
+        classes = next((e for _, e in enumerate(datasets)
+                        if len(e['output']) - 1 == num_classes))['output'][:-1]
+    else:
+        raise ValueError(f'Unsupported num_classes {num_classes}')
+
+    classes =  ("horse_cough", "horse_neigh", "human_cough")
+
+    augmentation = {'aug_num': 2}
+    quantization_scheme = {'compand': False, 'mu': 10}
+
+    if load_train:
+        train_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='train',
+                            transform=transform, t_type='keyword',
+                            quantization_scheme=quantization_scheme,
+                            augmentation=augmentation, download=True)
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
+                           transform=transform, t_type='keyword',
+                           quantization_scheme=quantization_scheme,
+                           augmentation=augmentation, download=True)
+
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
 
 def KWS_get_unquantized_datasets(data, load_train=True, load_test=True, num_classes=6):
     """
