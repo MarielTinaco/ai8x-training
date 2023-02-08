@@ -70,9 +70,9 @@ class KWS:
     class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3, 'dog': 4, 'down': 5,
                   'eight': 6, 'five': 7, 'follow': 8, 'forward': 9, 'four': 10, 'go': 11,
                   'happy': 12, 'horse_cough': 13, 'horse_neigh': 14, 'house': 15, 'human_cough' : 16, 
-                  'learn': 17, 'left': 18, 'marvin': 19, 'nine': 20, 'no': 21, 'off': 22, 'on': 23, 
-                  'one': 24, 'right': 25, 'seven': 26, 'sheila': 27, 'six': 28, 'stop': 29, 'three': 30, 
-                  'tree': 31, 'two': 32, 'up': 33, 'visual': 34, 'wow': 35, 'yes': 36, 'zero': 37}
+                  'learn': 17, 'left': 18, 'marvin': 19, 'nine': 20, 'no': 21, 'non_horse_cough':22 , 'off': 23, 'on': 24, 
+                  'one': 25, 'right': 26, 'seven': 27, 'sheila': 28, 'six': 29, 'stop': 30, 'three': 31, 
+                  'tree': 32, 'two': 33, 'up': 34, 'visual': 35, 'wow': 36, 'yes': 37, 'zero': 38}
 
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
                  augmentation=None, download=False, save_unquantized=False):
@@ -500,11 +500,17 @@ class KWS_20(KWS):
 
 class KWS_EQUINE(KWS):
 
+    # class_dict = {
+    #     "horse_cough" : 0,
+    #     "horse_neigh" : 1,
+    #     "human_cough" : 2
+    # }
+    
     class_dict = {
         "horse_cough" : 0,
-        "horse_neigh" : 1,
-        "human_cough" : 2
+        "non_horse_cough" : 1,
     }
+
     def __str__(self):
         return self.__class__.__name__
 
@@ -608,7 +614,7 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 #     return KWS_get_datasets(data, load_train, load_test, num_classes=1)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=3):
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=2):
     # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
     """
     Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
@@ -619,13 +625,14 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes
         ai8x.normalize(act_mode_8bit=args)
     ])
 
-    if num_classes in (1, 3, 6, 20, 21, 36):
-        classes = next((e for _, e in enumerate(datasets)
-                        if len(e['output']) - 1 == num_classes))['output'][:-1]
-    else:
-        raise ValueError(f'Unsupported num_classes {num_classes}')
+    # if num_classes in (1, 3, 6, 20, 21, 36):
+    #     classes = next((e for _, e in enumerate(datasets)
+    #                     if len(e['output']) - 1 == num_classes))['output'][:-1]
+    # else:
+    #     raise ValueError(f'Unsupported num_classes {num_classes}')
 
-    classes =  ("horse_cough", "horse_neigh", "human_cough")
+    # classes =  ("horse_cough", "horse_neigh", "human_cough")
+    classes =  ("horse_cough", "non_horse_cough")
 
     augmentation = {'aug_num': 2}
     quantization_scheme = {'compand': False, 'mu': 10}
