@@ -621,11 +621,7 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=2):
-    # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
-    """
-    Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
-    """
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, download = True):
     (data_dir, args) = data
 
     transform = transforms.Compose([
@@ -725,15 +721,13 @@ datasets = [
         'weight': (0.01, 1),
         'loader': KWS_HORSE_TF_get_datasets,
     },
+    {
+        'name': 'KWS_20',  # 20 keywords
+        'input': (128, 128),
+        'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
+                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero',
+                   'UNKNOWN'),
+        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
+        'loader': KWS_20_get_datasets,
+    }
 ]
-
-
-# datasets = [
-#     {
-#         'name': 'KWS_20_horsecough',  # 20 keywords
-#         'input': (128, 128),
-#         'output': ('horse_cough','UNKNOWN'),
-#         'weight': (1, 0.01),
-#         'loader': KWS_HORSE_get_datasets,
-#     },
-# ]
