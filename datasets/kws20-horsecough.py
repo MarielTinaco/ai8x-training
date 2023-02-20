@@ -67,18 +67,19 @@ class KWS:
     url = 'http://download.tensorflow.org/data/speech_commands_v0.02.tar.gz'
     fs = 16000
 
-    class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3, 'dog': 4, 'down': 5,
-                  'eight': 6, 'five': 7, 'follow': 8, 'forward': 9, 'four': 10, 'go': 11,
-                  'happy': 12, 'horse_cough': 13, 'horse_neigh': 14, 'house': 15, 'human_cough' : 16, 
-                  'learn': 17, 'left': 18, 'marvin': 19, 'nine': 20, 'no': 21, 'non_horse_cough':22 , 'off': 23, 'on': 24, 
-                  'one': 25, 'right': 26, 'seven': 27, 'sheila': 28, 'six': 29, 'stop': 30, 'three': 31, 
-                  'tree': 32, 'two': 33, 'up': 34, 'visual': 35, 'wow': 36, 'yes': 37, 'zero': 38}
+    # class_dict = {'backward': 0, 'bed': 1, 'bird': 2, 'cat': 3,  'combined': 4 ,'dog': 5, 'down': 6,
+    #               'eight': 7, 'five': 8, 'follow': 9, 'forward': 10, 'four': 11, 'go': 12,
+    #               'happy': 13, 'horse_cough': 14, 'horse_neigh': 15, 'house': 16, 'human_cough' : 17, 
+    #               'learn': 18, 'left': 19, 'marvin': 20, 'nine': 21, 'no': 22, 'off': 23, 'on': 24, 
+    #               'one': 25, 'right': 26, 'seven': 27, 'sheila': 28, 'six': 29, 'stop': 30, 'three': 31, 
+    #               'tree': 32, 'two': 33, 'up': 34, 'visual': 35, 'wow': 36, 'yes': 37, 'zero': 38}
 
+    class_dict = {}
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
-                 augmentation=None, download=False, save_unquantized=False):
+                 augmentation=None, download=True, save_unquantized=False):
 
         self.root = root
-        self.classes = classes
+        self.classes = np.sort(classes)
         self.d_type = d_type
         self.t_type = t_type
         self.transform = transform
@@ -88,7 +89,7 @@ class KWS:
         self.__parse_augmentation(augmentation)
 
         if not self.save_unquantized:
-            self.data_file = 'dataset2.pt'
+            self.data_file = 'dataset_human.pt'
         else:
             self.data_file = 'unquantized.pt'
 
@@ -101,6 +102,10 @@ class KWS:
         print(f'\nProcessing {self.d_type}...')
         self.__filter_dtype()
         self.__filter_classes()
+        
+        
+        for ix,class_key in enumerate(classes):
+            self.class_dict.update({ix:class_key})
 
     @property
     def raw_folder(self):
@@ -406,6 +411,7 @@ class KWS:
                 print(f'{label:8s}:  \t{len(record_list)}')
             print('------------------------------------------')
 
+            
             for i, label in enumerate(labels):
                 print(f'Processing the label: {label}. {i + 1} of {len(labels)}')
                 record_list = sorted(os.listdir(os.path.join(self.raw_folder, label)))
@@ -429,45 +435,50 @@ class KWS:
                 for r, record_name in enumerate(record_list):
                     if r % 1000 == 0:
                         print(f'\t{r + 1} of {len(record_list)}')
+                    
+                    # Insert try/except to catch errors
+                    try:
+                        if hash(record_name) % 10 < 9:
+                            d_typ = np.uint8(0)  # train+val
+                            train_count += 1
+                        else:
+                            d_typ = np.uint8(1)  # test
+                            test_count += 1
 
-                    if hash(record_name) % 10 < 9:
-                        d_typ = np.uint8(0)  # train+val
-                        train_count += 1
-                    else:
-                        d_typ = np.uint8(1)  # test
-                        test_count += 1
+                        record_pth = os.path.join(self.raw_folder, label, record_name)
+                        record, fs = librosa.load(record_pth, offset=0, sr=16000)
+                        audio_seq_list = self.augment_multiple(record, fs,
+                                                            self.augmentation['aug_num'])
+                        for n_a, audio_seq in enumerate(audio_seq_list):
+                            # store set type: train+validate or test
+                            data_type[(self.augmentation['aug_num'] + 1) * r + n_a, 0] = d_typ
 
-                    record_pth = os.path.join(self.raw_folder, label, record_name)
-                    record, fs = librosa.load(record_pth, offset=0, sr=None)
-                    audio_seq_list = self.augment_multiple(record, fs,
-                                                           self.augmentation['aug_num'])
-                    for n_a, audio_seq in enumerate(audio_seq_list):
-                        # store set type: train+validate or test
-                        data_type[(self.augmentation['aug_num'] + 1) * r + n_a, 0] = d_typ
-
-                        # Write audio 128x128=16384 samples without overlap
-                        for n_r in range(num_rows):
-                            start_idx = n_r*(row_len - overlap)
-                            end_idx = start_idx + row_len
-                            audio_chunk = audio_seq[start_idx:end_idx]
-                            # pad zero if the length of the chunk is smaller than row_len
-                            audio_chunk = np.pad(audio_chunk, [0, row_len-audio_chunk.size])
-                            # store input data after quantization
-                            data_idx = (self.augmentation['aug_num'] + 1) * r + n_a
-                            if not self.save_unquantized:
-                                data_in[data_idx, :, n_r] = \
-                                    KWS.quantize_audio(audio_chunk,
-                                                       num_bits=self.quantization['bits'],
-                                                       compand=self.quantization['compand'],
-                                                       mu=self.quantization['mu'])
-                            else:
-                                data_in[data_idx, :, n_r] = audio_chunk
+                            # Write audio 128x128=16384 samples without overlap
+                            for n_r in range(num_rows):
+                                start_idx = n_r*(row_len - overlap)
+                                end_idx = start_idx + row_len
+                                audio_chunk = audio_seq[start_idx:end_idx]
+                                # pad zero if the length of the chunk is smaller than row_len
+                                audio_chunk = np.pad(audio_chunk, [0, row_len-audio_chunk.size])
+                                # store input data after quantization
+                                data_idx = (self.augmentation['aug_num'] + 1) * r + n_a
+                                if not self.save_unquantized:
+                                    data_in[data_idx, :, n_r] = \
+                                        KWS.quantize_audio(audio_chunk,
+                                                        num_bits=self.quantization['bits'],
+                                                        compand=self.quantization['compand'],
+                                                        mu=self.quantization['mu'])
+                                else:
+                                    data_in[data_idx, :, n_r] = audio_chunk
+                    except Exception as e:
+                        print("Gen dataset error: ",e)
 
                 dur = time.time() - time_s
                 print(f'Finished in {dur:.3f} seconds.')
                 print(data_in.shape)
                 time_s = time.time()
-                if i == 0:
+
+                if i==0:
                     data_in_all = data_in.copy()
                     data_class_all = data_class.copy()
                     data_type_all = data_type.copy()
@@ -475,6 +486,7 @@ class KWS:
                     data_in_all = np.concatenate((data_in_all, data_in), axis=0, dtype='uint8')
                     data_class_all = np.concatenate((data_class_all, data_class), axis=0, dtype='uint8')
                     data_type_all = np.concatenate((data_type_all, data_type), axis=0, dtype='uint8')
+
                 dur = time.time() - time_s
                 print(f'Data concatenation finished in {dur:.3f} seconds.')
 
@@ -499,17 +511,10 @@ class KWS_20(KWS):
         return self.__class__.__name__
 
 class KWS_EQUINE(KWS):
-
     # class_dict = {
-    #     "horse_cough" : 0,
-    #     "horse_neigh" : 1,
-    #     "human_cough" : 2
+    #     "combined" : 0,
+    #     "human_cough" : 1
     # }
-    
-    class_dict = {
-        "horse_cough" : 0,
-        "non_horse_cough" : 1,
-    }
 
     def __str__(self):
         return self.__class__.__name__
@@ -517,7 +522,10 @@ class KWS_EQUINE(KWS):
     def _download(self):
 
         if self._check_exists():
+            print("Exists")
             return
+        else:
+            print("Not Exists")
 
         self._makedir_exist_ok(self.raw_folder)
         self._makedir_exist_ok(self.processed_folder)
@@ -612,7 +620,6 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     0.8 and 1.3, -0.1 and 0.1, 0 and 1, respectively.
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
-#     return KWS_get_datasets(data, load_train, load_test, num_classes=1)
 
 def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=2):
     # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
@@ -625,23 +632,17 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes
         ai8x.normalize(act_mode_8bit=args)
     ])
 
-    # if num_classes in (1, 3, 6, 20, 21, 36):
-    #     classes = next((e for _, e in enumerate(datasets)
-    #                     if len(e['output']) - 1 == num_classes))['output'][:-1]
-    # else:
-    #     raise ValueError(f'Unsupported num_classes {num_classes}')
-
-    # classes =  ("horse_cough", "horse_neigh", "human_cough")
-    classes =  ("horse_cough", "non_horse_cough")
-
+    # classes =  ("combined","horse_cough")
+    classes =  ("combined","human_cough")
     augmentation = {'aug_num': 2}
     quantization_scheme = {'compand': False, 'mu': 10}
+    download = True
 
     if load_train:
         train_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='train',
                             transform=transform, t_type='keyword',
                             quantization_scheme=quantization_scheme,
-                            augmentation=augmentation, download=True)
+                            augmentation=augmentation, download=download)
     else:
         train_dataset = None
 
@@ -649,7 +650,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes
         test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
                            transform=transform, t_type='keyword',
                            quantization_scheme=quantization_scheme,
-                           augmentation=augmentation, download=True)
+                           augmentation=augmentation, download=download)
 
     else:
         test_dataset = None
@@ -707,7 +708,7 @@ def KWS_35_get_unquantized_datasets(data, load_train=True, load_test=True):
 
 datasets = [
     {
-        'name': 'KWS_20_horsecough',  # 20 keywords
+        'name': 'KWS_20_horsecough',
         'input': (128, 128),
         'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
                    'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero', 
@@ -718,10 +719,10 @@ datasets = [
         'loader': KWS_HORSE_get_datasets,
     },
     {
-        'name': 'KWS_horsecough_tf',  # 20 keywords
+        'name': 'KWS_horsecough_tf',
         'input': (128, 128),
-        'output': ('horse_cough', 'horse_neigh', 'human_cough', 'UNKNOWN'),
-        'weight': (1, 1, 1, 0.14),
+        'output': ('combined','human_cough'),
+        'weight': (0.01, 1),
         'loader': KWS_HORSE_TF_get_datasets,
     },
 ]
