@@ -643,7 +643,7 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download = True):
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download = True, fname='processed.pt'):
     (data_dir, args) = data
 
     transform = transforms.Compose([
@@ -764,7 +764,7 @@ datasets = [
         'name': 'KWS_horsecough_tf',
         'input': (128, 128),
         'output': ('combined','human_cough'),
-        'weight': (0.5, 1),
+        'weight': (0.9, 1),
         'loader': KWS_HORSE_TF_get_datasets,
     },
     {
