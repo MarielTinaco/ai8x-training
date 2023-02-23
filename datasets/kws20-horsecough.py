@@ -89,7 +89,7 @@ class KWS:
         self.__parse_augmentation(augmentation)
 
         if not self.save_unquantized:
-            self.data_file = 'dataset_human.pt'
+            self.data_file = 'human_others_4.pt'
         else:
             self.data_file = 'unquantized.pt'
 
@@ -330,7 +330,23 @@ class KWS:
             audio2 = np.pad(audio2, (0, max(0, input_length - len(audio2))), "constant")
 
         return audio2
+    
+    def rescale(self, audio, min_val=-1,max_val=1):
+            sig = audio
+            mean = np.average(sig)
 
+            sig = sig-mean # REMOVE DC COMPONENT
+
+            sig_max = np.max(sig)
+            sig_min = np.min(sig)
+
+            if sig_max >= np.abs(sig_min):
+                sig_scaled = sig/sig_max
+            else:
+                sig_scaled = sig/np.abs(sig_min)
+
+            return sig_scaled
+    
     def augment(self, audio, fs, verbose=False):
         """Augments audio by adding random noise, shift and stretch ratio.
         """
@@ -344,6 +360,9 @@ class KWS:
         aug_audio = tsm.wsola(audio, random_strech_coeff)
         aug_audio = self.shift(aug_audio, random_shift_time, fs)
         aug_audio = self.add_white_noise(aug_audio, random_noise_var_coeff)
+        
+        aug_audio = self.rescale(aug_audio)
+
         if verbose:
             print(f'random_noise_var_coeff: {random_noise_var_coeff:.2f}\nrandom_shift_time: \
                     {random_shift_time:.2f}\nrandom_strech_coeff: {random_strech_coeff:.2f}')
@@ -449,6 +468,9 @@ class KWS:
                         record, fs = librosa.load(record_pth, offset=0, sr=16000)
                         audio_seq_list = self.augment_multiple(record, fs,
                                                             self.augmentation['aug_num'])
+
+                    
+
                         for n_a, audio_seq in enumerate(audio_seq_list):
                             # store set type: train+validate or test
                             data_type[(self.augmentation['aug_num'] + 1) * r + n_a, 0] = d_typ
@@ -621,7 +643,7 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, download = True):
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download = True):
     (data_dir, args) = data
 
     transform = transforms.Compose([
@@ -642,6 +664,30 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, download = 
     else:
         train_dataset = None
 
+    if load_test:
+        test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
+                           transform=transform, t_type='keyword',
+                           quantization_scheme=quantization_scheme,
+                           augmentation=augmentation, download=download)
+
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
+
+def INF_get_datasets(data, load_train=False, load_test=True, download = True):
+    (data_dir, args) = data
+
+    transform = transforms.Compose([
+        ai8x.normalize(act_mode_8bit=args)
+    ])
+
+    # classes =  ("combined","horse_cough")
+    classes =  ("horse_cough")
+    augmentation = {'aug_num': 0}
+    quantization_scheme = {'compand': False, 'mu': 10}
+    download = True
+    train_dataset = None
     if load_test:
         test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
                            transform=transform, t_type='keyword',
@@ -718,7 +764,7 @@ datasets = [
         'name': 'KWS_horsecough_tf',
         'input': (128, 128),
         'output': ('combined','human_cough'),
-        'weight': (0.01, 1),
+        'weight': (0.5, 1),
         'loader': KWS_HORSE_TF_get_datasets,
     },
     {
