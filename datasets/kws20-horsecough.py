@@ -76,7 +76,7 @@ class KWS:
 
     class_dict = {}
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
-                 augmentation=None, download=True, save_unquantized=False):
+                 augmentation=None, download=True, save_unquantized=False, fname = 'human_others.pt'):
 
         self.root = root
         self.classes = np.sort(classes)
@@ -89,7 +89,7 @@ class KWS:
         self.__parse_augmentation(augmentation)
 
         if not self.save_unquantized:
-            self.data_file = 'human_others_4.pt'
+            self.data_file = fname
         else:
             self.data_file = 'unquantized.pt'
 
@@ -551,7 +551,7 @@ class KWS_EQUINE(KWS):
 
         self._makedir_exist_ok(self.raw_folder)
         self._makedir_exist_ok(self.processed_folder)
-
+        
         self._gen_datasets()
 
 def KWS_get_datasets(data, load_train=True, load_test=True, num_classes=6):
@@ -660,7 +660,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download =
         train_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='train',
                             transform=transform, t_type='keyword',
                             quantization_scheme=quantization_scheme,
-                            augmentation=augmentation, download=download)
+                            augmentation=augmentation, download=download, fname = fname)
     else:
         train_dataset = None
 
@@ -668,7 +668,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download =
         test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
                            transform=transform, t_type='keyword',
                            quantization_scheme=quantization_scheme,
-                           augmentation=augmentation, download=download)
+                           augmentation=augmentation, download=download,fname = fname)
 
     else:
         test_dataset = None
