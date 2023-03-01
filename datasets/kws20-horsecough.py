@@ -764,7 +764,7 @@ datasets = [
         'name': 'KWS_horsecough_tf',
         'input': (128, 128),
         'output': ('combined','human_cough'),
-        'weight': (0.9, 1),
+        'weight': (1, 1),
         'loader': KWS_HORSE_TF_get_datasets,
     },
     {
