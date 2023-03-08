@@ -614,7 +614,7 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 #     return KWS_get_datasets(data, load_train, load_test, num_classes=1)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True, num_classes=2):
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
     # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
     """
     Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
