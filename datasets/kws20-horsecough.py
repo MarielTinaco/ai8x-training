@@ -507,8 +507,8 @@ class KWS_EQUINE(KWS):
     # }
     
     class_dict = {
-        "horse_cough" : 0,
-        "non_horse_cough" : 1,
+        "COMBINED" : 0,
+        "COUGH" : 1,
     }
 
     def __str__(self):
@@ -632,7 +632,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
     #     raise ValueError(f'Unsupported num_classes {num_classes}')
 
     # classes =  ("horse_cough", "horse_neigh", "human_cough")
-    classes =  ("horse_cough", "non_horse_cough")
+    classes =  ("COMBINED", "COUGH")
 
     augmentation = {'aug_num': 2}
     quantization_scheme = {'compand': False, 'mu': 10}
@@ -707,32 +707,9 @@ def KWS_35_get_unquantized_datasets(data, load_train=True, load_test=True):
 
 datasets = [
     {
-        'name': 'KWS_20_horsecough',  # 20 keywords
+        'name': 'EQUINE', 
         'input': (128, 128),
-        'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
-                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero', 
-                   'sheila', 'marvin', 'visual', 'learn', 'house', 'happy', 'tree', 'forward',
-                   'follow', 'dog', 'cat', 'bird', 'bed', 'backward', 'wow', 'horse_cough',
-                   'UNKNOWN'),
-        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
-        'loader': KWS_HORSE_get_datasets,
-    },
-    {
-        'name': 'KWS_horsecough_tf',  # 20 keywords
-        'input': (128, 128),
-        'output': ('horse_cough', 'horse_neigh', 'human_cough', 'UNKNOWN'),
-        'weight': (1, 1, 1, 0.14),
+        'output': ('COMBINED', 'COUGH'),
+        'weight': (1, 1),
         'loader': KWS_HORSE_TF_get_datasets,
-    },
-]
-
-
-# datasets = [
-#     {
-#         'name': 'KWS_20_horsecough',  # 20 keywords
-#         'input': (128, 128),
-#         'output': ('horse_cough','UNKNOWN'),
-#         'weight': (1, 0.01),
-#         'loader': KWS_HORSE_get_datasets,
-#     },
-# ]
+    }]

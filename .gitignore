@@ -18,3 +18,12 @@
 /super-linter.log
 /super-linter.report
 /venv/
+*.0
+*.4
+*.2
+*.3
+*.1
+*.5
+*.0
+*.0
+notebooks/runs/Mar08_11-46-54_DESK-TOP/events.out.tfevents.1678247215.DESK-TOP.10208.0
