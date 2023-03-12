@@ -537,6 +537,11 @@ class KWS_EQUINE(KWS):
     #     "combined" : 0,
     #     "human_cough" : 1
     # }
+    
+    class_dict = {
+        "COMBINED" : 0,
+        "COUGH" : 1,
+    }
 
     def __str__(self):
         return self.__class__.__name__
@@ -643,15 +648,26 @@ def KWS_HORSE_get_datasets(data, load_train=True, load_test=True):
     """
     return KWS_get_datasets(data, load_train, load_test, num_classes=36)
 
-def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=False, download = True, fname='processed.pt'):
+def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
+    # return KWS_get_datasets(data, load_train, load_test, num_classes=3)
+    """
+    Load the folded 1D version of unquantized SpeechCom dataset for 35 classes.
+    """
     (data_dir, args) = data
 
     transform = transforms.Compose([
         ai8x.normalize(act_mode_8bit=args)
     ])
 
-    # classes =  ("combined","horse_cough")
-    classes =  ("combined","human_cough")
+    # if num_classes in (1, 3, 6, 20, 21, 36):
+    #     classes = next((e for _, e in enumerate(datasets)
+    #                     if len(e['output']) - 1 == num_classes))['output'][:-1]
+    # else:
+    #     raise ValueError(f'Unsupported num_classes {num_classes}')
+
+    # classes =  ("horse_cough", "horse_neigh", "human_cough")
+    classes =  ("COMBINED", "COUGH")
+
     augmentation = {'aug_num': 2}
     quantization_scheme = {'compand': False, 'mu': 10}
     download = True
@@ -750,30 +766,9 @@ def KWS_35_get_unquantized_datasets(data, load_train=True, load_test=True):
 
 datasets = [
     {
-        'name': 'KWS_20_horsecough',
+        'name': 'EQUINE', 
         'input': (128, 128),
-        'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
-                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero', 
-                   'sheila', 'marvin', 'visual', 'learn', 'house', 'happy', 'tree', 'forward',
-                   'follow', 'dog', 'cat', 'bird', 'bed', 'backward', 'wow', 'horse_cough',
-                   'UNKNOWN'),
-        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
-        'loader': KWS_HORSE_get_datasets,
-    },
-    {
-        'name': 'KWS_horsecough_tf',
-        'input': (128, 128),
-        'output': ('combined','human_cough'),
+        'output': ('COMBINED', 'COUGH'),
         'weight': (1, 1),
         'loader': KWS_HORSE_TF_get_datasets,
-    },
-    {
-        'name': 'KWS_20',  # 20 keywords
-        'input': (128, 128),
-        'output': ('up', 'down', 'left', 'right', 'stop', 'go', 'yes', 'no', 'on', 'off', 'one',
-                   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'zero',
-                   'UNKNOWN'),
-        'weight': (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0.14),
-        'loader': KWS_20_get_datasets,
-    }
-]
+    }]
