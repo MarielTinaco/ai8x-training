@@ -76,7 +76,7 @@ class KWS:
 
     class_dict = {}
     def __init__(self, root, classes, d_type, t_type, transform=None, quantization_scheme=None,
-                 augmentation=None, download=True, save_unquantized=False, fname = 'human_others.pt'):
+                 augmentation=None, download=True, save_unquantized=False, fname = 'processed.pt'):
 
         self.root = root
         self.classes = np.sort(classes)
@@ -538,10 +538,10 @@ class KWS_EQUINE(KWS):
     #     "human_cough" : 1
     # }
     
-    class_dict = {
-        "COMBINED" : 0,
-        "COUGH" : 1,
-    }
+    # class_dict = {
+    #     "COMBINED" : 0,
+    #     "COUGH" : 1,
+    # }
 
     def __str__(self):
         return self.__class__.__name__
@@ -666,7 +666,10 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
     #     raise ValueError(f'Unsupported num_classes {num_classes}')
 
     # classes =  ("horse_cough", "horse_neigh", "human_cough")
-    classes =  ("COMBINED", "COUGH")
+
+    classes = ('a_combined', 'a_cough','backward', 'bed', 'bird', 'cat','dog', 'down', 'eight', 'five', 'follow', 'forward','four', 
+               'go', 'happy', 'house' , 'learn', 'left', 'marvin', 'nine', 'no', 'off', 'on', 'one', 'right', 'seven', 
+               'sheila', 'six', 'stop', 'three', 'tree', 'two', 'up', 'visual', 'wow', 'yes', 'zero')
 
     augmentation = {'aug_num': 2}
     quantization_scheme = {'compand': False, 'mu': 10}
@@ -676,7 +679,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
         train_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='train',
                             transform=transform, t_type='keyword',
                             quantization_scheme=quantization_scheme,
-                            augmentation=augmentation, download=download, fname = fname)
+                            augmentation=augmentation, download=download)
     else:
         train_dataset = None
 
@@ -684,7 +687,7 @@ def KWS_HORSE_TF_get_datasets(data, load_train=True, load_test=True):
         test_dataset = KWS_EQUINE(root=data_dir, classes=classes, d_type='test',
                            transform=transform, t_type='keyword',
                            quantization_scheme=quantization_scheme,
-                           augmentation=augmentation, download=download,fname = fname)
+                           augmentation=augmentation, download=download)
 
     else:
         test_dataset = None
@@ -768,7 +771,10 @@ datasets = [
     {
         'name': 'EQUINE', 
         'input': (128, 128),
-        'output': ('COMBINED', 'COUGH'),
-        'weight': (1, 1),
+        'output': ('a_combined', 'a_cough','backward', 'bed', 'bird', 'cat','dog', 'down', 'eight', 'five', 'follow', 'forward','four', 
+                    'go', 'happy', 'house' , 'learn', 'left', 'marvin', 'nine', 'no', 'off', 'on', 'one', 'right', 'seven', 
+                    'sheila', 'six', 'stop', 'three', 'tree', 'two', 'up', 'visual', 'wow', 'yes', 'zero'),
+        # 'weight': (1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1),
+        'weight' : (0.3010441, 0.365493, 0.9356971, 0.7730884, 1, 0.7666174, 0.7316729, 0.3974981, 0.4111434, 0.3842547, 0.9860671, 1.0, 0.4176502, 0.4012887, 0.7580331, 0.736867, 0.9885714, 0.409629, 0.7414286, 0.3957804, 0.3950774, 0.4157543, 0.4049415, 0.4002571, 0.4121228, 0.3894447, 0.7700297, 0.4033679, 0.4021178, 0.4177623, 0.885162, 0.4012887, 0.4182111, 0.9780151, 0.7333961, 0.3850148, 0.3842547),
         'loader': KWS_HORSE_TF_get_datasets,
     }]
