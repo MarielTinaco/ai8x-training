@@ -56,6 +56,7 @@ class AI85EQUINE(nn.Module):
         self.kws_conv4 = ai8x.FusedMaxPoolConv1dReLU(100, 64, 6, stride=1, padding=1,
                                                      bias=bias, **kwargs)
     
+        self.fc0 = ai8x.Linear(256, 256, bias=bias, wide=True, **kwargs)
         self.fc1 = ai8x.Linear(256, 512, bias=bias, wide=True, **kwargs)
         self.fc2 = ai8x.Linear(512, 512, bias=bias, wide=True, **kwargs)
         self.fc3 = ai8x.Linear(512, 512, bias=bias, wide=True, **kwargs)
@@ -78,7 +79,8 @@ class AI85EQUINE(nn.Module):
         x = self.kws_conv3(x)
         x = self.kws_conv4(x)
         x = x.view(x.size(0), -1)
-        # x = self.fc1(x)
+        # x = self.fc0(x)
+        # x = self.fc0(x)
         # x = self.fc2(x)
         # x = self.fc3(x)
         # x = self.fc4(x)
