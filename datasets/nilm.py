@@ -81,16 +81,21 @@ class UkdaleDataset(Dataset):
 
         super().__init__(inputs, targets, states, seq_len)
 
+        self.transform = transform
 
-def ukdale_get_datasets(data, load_train=True, load_test=True):
+    def visualize_batch(self, index=None):
+
+        index = 0 if index is None else index
+
+        print(index)
+
+def ukdale_get_datasets(data, load_train=True, load_test=True, load_val=None):
 
     (data_dir, args) = data
 
     if load_train:
-        train_transform = transforms.Compose([
-            ai8x.normalize(args=args)
-        ])
-
+        train_transform = transforms.Compose([])
+        
         train_dataset = UkdaleDataset(root_dir=data_dir,
                                       d_type="train",
                                       transform=train_transform)
@@ -99,10 +104,7 @@ def ukdale_get_datasets(data, load_train=True, load_test=True):
         train_dataset = None
 
     if load_test:
-        test_transform = transforms.Compose([
-            ai8x.normalize(args=args)
-            ]
-        )
+        test_transform = transforms.Compose([])
 
         test_dataset = UkdaleDataset(root_dir=data_dir,
                                      d_type="test",
@@ -110,7 +112,19 @@ def ukdale_get_datasets(data, load_train=True, load_test=True):
     else:
         test_dataset = None
     
-    return train_dataset, test_dataset
+    if load_val:
+        val_transform = transforms.Compose([])
+
+        val_dataset = UkdaleDataset(root_dir=data_dir,
+                                     d_type="val",
+                                     transform=val_transform)
+    else:
+        val_dataset = None
+
+    if load_val:
+        return train_dataset, test_dataset, val_dataset
+    else:
+        return train_dataset, test_dataset
 
 datasets = [
     {
