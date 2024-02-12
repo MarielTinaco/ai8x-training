@@ -58,7 +58,7 @@ seq_len = 100
 data_path = "data/NILM/"
 deterministic = True
 log_prefix = "ukdale-train"
-log_dir = "jupyter_logging"
+log_dir = "logs"
 validation_split = 0.1
 print_freq = 10
 lr = 1e-4
@@ -174,7 +174,7 @@ all_tbloggers = [tflogger]
 
 ########################################################################################################
 
-num_epochs = 10
+num_epochs = 50
 msglogger.info('epochs: %d',num_epochs)
 optimizer = optim.Adam(model.parameters(), lr=lr, betas=(beta_1, beta_2))
 msglogger.info('Optimizer Type: %s', type(optimizer))
@@ -228,6 +228,71 @@ def test_epoch_end(outputs):
         
         return logs   
 
+def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
+        """Execute the validation/test loop."""
+
+        # store loss stats
+        losses = {'objective_loss': tnt.AverageValueMeter()}
+        classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(num_classes, 5)))
+
+        # validation set info
+        batch_time = tnt.AverageValueMeter()
+        total_samples = len(data_loader.sampler)
+        batch_size = data_loader.batch_size
+        confusion = tnt.ConfusionMeter(num_classes)
+        total_steps = (total_samples + batch_size - 1) // batch_size
+        msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
+
+        outputs = []
+
+        # Switch to evaluation mode
+        model.eval()
+
+        # iterate over the batches in the validation set
+        for validation_step, (inputs, target, states) in enumerate(data_loader):
+                with torch.no_grad():
+                        inputs, target, states = inputs.to(device), target.to(device), states.to(device)
+                        # compute output from model
+
+                        # forward pass and loss calculation
+                        logits, rmse_logits = model(inputs)
+                        prob, pred = torch.max(F.softmax(logits, 1), 1)
+                        loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
+                        if len(quantiles)>1:
+                                prob=prob.unsqueeze(1).expand_as(rmse_logits)
+                                loss_mse = criterion(rmse_logits, target)
+                                mae_score = F.l1_loss(rmse_logits,target.unsqueeze(1).expand_as(rmse_logits))
+                        else:    
+                                loss_mse = F.mse_loss(rmse_logits, target)
+                                mae_score = F.l1_loss(rmse_logits, target)
+
+                        # UNETNILM
+                        loss = loss_nll + loss_mse
+                        res = f1_score(pred, states, task="multiclass", num_classes=5)
+                        logs = {"nlloss":loss_nll, "mseloss":loss_mse,
+                                "mae":mae_score, "F1": res}
+
+                        losses['objective_loss'].add(loss.item())
+
+                        steps_completed = (validation_step+1)
+                        if steps_completed % print_freq == 0 or steps_completed == total_steps:
+                                stats = ('',
+                                        OrderedDict([('Loss', losses['objective_loss'].mean),])
+                                )
+                                distiller.log_training_progress(stats, None, epoch, steps_completed,
+                                                                total_steps, print_freq, loggers)
+                                
+                        outputs.append(logs)
+        
+        # OPTIONAL
+        avg_loss = np.mean([x['nlloss'].item()+x['mseloss'].item() for x in outputs])
+        avg_f1 = np.mean([x['F1'].item() for x in outputs])
+        avg_rmse = np.mean([x['mae'].item() for x in outputs])
+        logs = {'val_loss': avg_loss, "val_F1": avg_f1, "val_mae":avg_rmse}
+        
+        return {'log':logs}
+        
+
 if __name__ == "__main__":
         ####################################################################################
 
@@ -239,13 +304,8 @@ if __name__ == "__main__":
         # start the clock
         tic = datetime.datetime.now()
 
-        break_point = 10
-
         # training loop
         for epoch in range(num_epochs):
-
-                if epoch > break_point:
-                        break
 
                 if epoch > 0 and epoch == qat_policy['start_epoch']:
                         print('QAT is starting!')
@@ -369,8 +429,25 @@ if __name__ == "__main__":
 
                         outputs.append(logs)
 
-        outputs = test_epoch_end(outputs)
-        print(outputs)
+                outputs = test_epoch_end(outputs)
 
-        # after a training epoch, do validation
-        msglogger.info('--- validate (epoch=%d)-----------', epoch)
+                # after a training epoch, do validation
+                msglogger.info('--- validate (epoch=%d)-----------', epoch)
+
+                validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
+
+                print (validation_logs)
+
+                is_best = True
+
+                apputils.save_checkpoint(epoch, model_name, model, optimizer=optimizer,
+                                                scheduler=compression_scheduler, extras={},
+                                                is_best=is_best, name=name,
+                                                dir=msglogger.logdir)
+
+                ms_lr_scheduler.step(metrics=validation_logs["log"]["val_loss"])
+
+        validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
+
+        print(validation_logs)
+        
