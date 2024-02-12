@@ -53,7 +53,7 @@ dataset_fn = nilm.ukdale_get_datasets
 model_name = "cnn1dnilm"
 num_classes = 5
 workers = 5
-batch_size = 8
+batch_size = 32
 seq_len = 100
 data_path = "data/NILM/"
 deterministic = True
@@ -156,7 +156,7 @@ print('Running on device: {}'.format(device))
 
 ai8x.set_device(device=85, simulate=False, round_avg=False)
 
-model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_quantiles=len(quantiles))
+model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=3, n_quantiles=len(quantiles))
 msglogger.info('model: %s',model)
 model = model.to(device)
 
@@ -167,7 +167,7 @@ msglogger.info('Number of Model Params: %d',count_params(model))
 # dummy_input = batch_select[0]
 # tflogger.tblogger.writer.add_graph(model.to('cpu'), (dummy_input, ), False)
 
-model = model.to(device)
+# model = model.to(device)
 
 all_loggers.append(tflogger)
 all_tbloggers = [tflogger]
@@ -233,7 +233,6 @@ if __name__ == "__main__":
 
         # store model history across epochs
         perf_scores_history = []
-        model = model.to(device)
 
         name = model_name
 
@@ -284,7 +283,7 @@ if __name__ == "__main__":
 
                 # iterate over all batches in the dataset    
                 for train_step, (inputs, target, states) in enumerate(train_loader):
-
+                        torch.cuda.empty_cache()
                         # Measure data loading time
                         data_time.add(time.time() - end)
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
@@ -359,7 +358,8 @@ if __name__ == "__main__":
                         end = time.time()
 
                         # Test
-                        logits, pred_power  = model(inputs)
+                        with torch.no_grad():
+                                logits, pred_power  = model(inputs)
 
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
