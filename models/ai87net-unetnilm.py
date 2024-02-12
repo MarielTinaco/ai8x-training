@@ -110,15 +110,16 @@ class AI85CNN1DNiLM(nn.Module):
     def __init__(self, in_size=1, 
                  output_size=5,
                  d_model=64,
-                 dropout=0.01, 
+                 dropout=0.1, 
                  seq_len=9,  
                  n_layers=5, 
                  n_quantiles=3, 
-                 pool_filter=16):
+                 pool_filter=16,
+                 device="cuda:0"):
         super(AI85CNN1DNiLM, self).__init__()
 
         self.dropout = nn.Dropout(dropout)
-        self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len)
+        self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len, device=device)
         self.pool_filter = pool_filter
         self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None)
         self.n_quantiles = n_quantiles
@@ -153,6 +154,7 @@ class Conv1D(nn.Module):
                  last=False,
                  activation="ReLU",
                  batchnorm="NoAffine",
+                 device="cuda:0",
                  **kwargs):
         super(Conv1D, self).__init__()
         
@@ -195,7 +197,7 @@ class Conv1D(nn.Module):
                 batchnorm=batchnorm,
                 **kwargs
             )
-        nn.utils.weight_norm(self.net.op)    
+        nn.utils.weight_norm(self.net.op.to(device))    
         nn.init.xavier_uniform_(self.net.op.weight)
         
     def forward(self, x):
@@ -206,16 +208,17 @@ class Encoder(nn.Module):
                  n_channels=10, 
                  n_kernels=16, 
                  n_layers=3, 
-                 seq_size=50):
+                 seq_size=50,
+                 device="cuda:0"):
         super(Encoder, self).__init__()
         self.feat_size = (seq_size-1) // 2**n_layers +1
         self.feat_dim = self.feat_size * n_kernels
         self.conv_stack = nn.Sequential(
-            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", last=False)] +
+            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", last=False, device=device)] +
               [Conv1D(n_kernels//2**(n_layers-l),
-                         n_kernels//2**(n_layers-l-1), activation="ReLU", last=False)
+                         n_kernels//2**(n_layers-l-1), activation="ReLU", last=False, device=device)
                for l in range(1, n_layers-1)] +
-              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", last=False)])
+              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", last=False, device=device)])
         )
     def forward(self, x):
         assert len(x.size())==3
