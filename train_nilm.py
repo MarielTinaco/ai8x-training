@@ -134,6 +134,19 @@ msglogger.info('dataset_name:%s\ndataset_fn=%s\nnum_classes=%d\nmodel_name=%s\se
 
 args = Args(act_mode_8bit=False)
 
+class NormDen:
+        def __init__(self, mini, maxi):
+               self.mini = mini
+               self.maxi = maxi
+
+        # def normalize(self, data):
+        #         data = (data - self.mini) / (self.maxi - self.mini)
+        #         return data.sub(0.5).mul(256.).round().clamp(min=-128, max=127).div(128.)
+
+        def normalize(self, data):
+                data = (data - self.mini) / (self.maxi - self.mini)
+                return data.mul(256.).round().clamp(min=0, max=256).div(256.)
+
 ########################################################################################
 
 train_set, test_set, val_set = dataset_fn((data_path, args), load_train=True, load_test=True, load_val=True)
@@ -304,6 +317,8 @@ if __name__ == "__main__":
         # start the clock
         tic = datetime.datetime.now()
 
+        normden = NormDen(mini=-1.0, maxi=12.92)
+
         # training loop
         for epoch in range(num_epochs):
 
@@ -346,6 +361,8 @@ if __name__ == "__main__":
                         torch.cuda.empty_cache()
                         # Measure data loading time
                         data_time.add(time.time() - end)
+                        inputs = normden.normalize(inputs)
+                        target = normden.normalize(target)
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
 
                         B = inputs.size(0)
@@ -424,7 +441,7 @@ if __name__ == "__main__":
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
                                 prob=prob.unsqueeze(1).expand_as(pred_power)
-                        
+
                         logs = {"pred_power":pred_power, "pred_state":pred_state, "power":target, "state":states}
 
                         outputs.append(logs)
