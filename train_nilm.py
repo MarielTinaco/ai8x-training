@@ -430,6 +430,7 @@ if __name__ == "__main__":
                         outputs.append(logs)
 
                 outputs = test_epoch_end(outputs)
+                print(outputs)
 
                 # after a training epoch, do validation
                 msglogger.info('--- validate (epoch=%d)-----------', epoch)
