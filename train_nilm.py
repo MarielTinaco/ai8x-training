@@ -53,7 +53,7 @@ dataset_fn = nilm.ukdale_get_datasets
 model_name = "cnn1dnilm"
 num_classes = 5
 workers = 5
-batch_size = 32
+batch_size = 128
 seq_len = 100
 data_path = "data/NILM/"
 deterministic = True
@@ -61,6 +61,7 @@ log_prefix = "ukdale-train"
 log_dir = "logs"
 validation_split = 0.1
 print_freq = 10
+num_epochs = 2
 lr = 1e-4
 beta_1 = 0.999
 beta_2 = 0.98
@@ -145,7 +146,15 @@ class NormDen:
 
         def normalize(self, data):
                 data = (data - self.mini) / (self.maxi - self.mini)
-                return data.mul(256.).round().clamp(min=0, max=256).div(256.)
+                data[data > 1] = 1
+                data[data < 0] = 0
+                return data.sub(0.5).mul(256.).round().clamp(min=-127, max=128).div(128.)
+
+        def denormalize(self, data):
+                drange = self.maxi - self.mini
+                data = data * drange
+                data = data + self.mini
+                return data
 
 ########################################################################################
 
@@ -187,7 +196,6 @@ all_tbloggers = [tflogger]
 
 ########################################################################################################
 
-num_epochs = 50
 msglogger.info('epochs: %d',num_epochs)
 optimizer = optim.Adam(model.parameters(), lr=lr, betas=(beta_1, beta_2))
 msglogger.info('Optimizer Type: %s', type(optimizer))
@@ -264,11 +272,15 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
         # iterate over the batches in the validation set
         for validation_step, (inputs, target, states) in enumerate(data_loader):
                 with torch.no_grad():
+
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
                         # compute output from model
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
+
+                        rmse_logits = normden.denormalize(rmse_logits)
+
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
                         if len(quantiles)>1:
@@ -361,14 +373,16 @@ if __name__ == "__main__":
                         torch.cuda.empty_cache()
                         # Measure data loading time
                         data_time.add(time.time() - end)
-                        inputs = normden.normalize(inputs)
-                        target = normden.normalize(target)
+
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
 
                         B = inputs.size(0)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
+
+                        rmse_logits = normden.denormalize(rmse_logits)
+
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
                         if len(quantiles)>1:
@@ -434,9 +448,15 @@ if __name__ == "__main__":
                                                                 all_loggers)
                         end = time.time()
 
+                for test_step, (inputs, target, states) in enumerate(test_loader):
+
+                        inputs, target, states = inputs.to(device), target.to(device), states.to(device)
+
                         # Test
                         with torch.no_grad():
                                 logits, pred_power  = model(inputs)
+
+                        pred_power = normden.denormalize(pred_power)
 
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
@@ -445,6 +465,7 @@ if __name__ == "__main__":
                         logs = {"pred_power":pred_power, "pred_state":pred_state, "power":target, "state":states}
 
                         outputs.append(logs)
+
 
                 outputs = test_epoch_end(outputs)
                 print(outputs)
