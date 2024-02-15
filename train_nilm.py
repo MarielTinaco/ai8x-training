@@ -199,9 +199,9 @@ all_tbloggers = [tflogger]
 msglogger.info('epochs: %d',num_epochs)
 optimizer = optim.Adam(model.parameters(), lr=lr, betas=(beta_1, beta_2))
 msglogger.info('Optimizer Type: %s', type(optimizer))
-# ms_lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 35,100], gamma=0.5)
+ms_lr_scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 35,100], gamma=0.5)
 # msglogger.info("lr_schedule:%s","base: "+str(ms_lr_scheduler.base_lrs)+" milestones: "+str(ms_lr_scheduler.milestones)+ " gamma: "+str(ms_lr_scheduler.gamma))
-ms_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience_scheduler, verbose=True, min_lr=1e-6, mode="max")
+# ms_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patience_scheduler, verbose=True, min_lr=1e-6, mode="max")
 # criterion = torch.nn.CrossEntropyLoss().to(device)
 
 criterion = QuantileLoss(quantiles=quantiles).to(device)
@@ -484,7 +484,8 @@ if __name__ == "__main__":
                                                 is_best=is_best, name=name,
                                                 dir=msglogger.logdir)
 
-                ms_lr_scheduler.step(metrics=validation_logs["log"]["val_loss"])
+                # ms_lr_scheduler.step(metrics=validation_logs["log"]["val_loss"])
+                ms_lr_scheduler.step()
 
         validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
 
