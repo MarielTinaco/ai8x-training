@@ -218,7 +218,7 @@ class Encoder(nn.Module):
               [Conv1D(n_kernels//2**(n_layers-l),
                          n_kernels//2**(n_layers-l-1), activation="ReLU", last=False, device=device)
                for l in range(1, n_layers-1)] +
-              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", last=False, device=device)])
+              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", last=True, device=device)])
         )
     def forward(self, x):
         assert len(x.size())==3
