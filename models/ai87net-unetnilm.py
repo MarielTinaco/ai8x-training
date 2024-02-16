@@ -126,10 +126,9 @@ class AI85CNN1DNiLM(nn.Module):
         
         self.fc_out_state  = ai8x.FusedLinearReLU(1024, output_size*2, bias=True)
         self.fc_out_power  = ai8x.FusedLinearReLU(1024, output_size*n_quantiles, bias=True)
-        nn.init.xavier_normal_(self.fc_out_state.op.weight)
-        nn.init.xavier_normal_(self.fc_out_power.op.weight)
+        # nn.init.xavier_normal_(self.fc_out_state.op.weight)
+        # nn.init.xavier_normal_(self.fc_out_power.op.weight)
         
-
     def forward(self, x):
         x = x.permute(0,2,1)
         B = x.size(0)
@@ -197,8 +196,10 @@ class Conv1D(nn.Module):
                 batchnorm=batchnorm,
                 **kwargs
             )
-        nn.utils.weight_norm(self.net.op.to(device))    
-        nn.init.xavier_uniform_(self.net.op.weight)
+
+        self.net.op.to(device)
+        # nn.utils.weight_norm(self.net.op.to(device))    
+        # nn.init.xavier_uniform_(self.net.op.weight)
         
     def forward(self, x):
         return self.net(x)
@@ -246,7 +247,7 @@ class MLPLayer(nn.Module):
             
         self.init_weights()
         self.mlp_network =  nn.Sequential(*self.layers)
-        
+
     def forward(self, z):
         return self.mlp_network(z)
         

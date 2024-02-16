@@ -149,14 +149,15 @@ class NormDen:
                 data = (data - self.mini) / (self.maxi - self.mini)
                 data[data > 1] = 1
                 data[data < 0] = 0
-                return data.sub(0.5).mul(256.).round().clamp(min=-127, max=128).div(128.)
+                return data
+                # return data.sub(0.5).mul(256.).round().clamp(min=-127, max=128).div(128.)
 
         def denormalize(self, data):
                 drange = self.maxi - self.mini
                 data = data * drange
                 data = data + self.mini
                 return data
-
+        
 ########################################################################################
 
 train_set, test_set, val_set = dataset_fn((data_path, args), load_train=True, load_test=True, load_val=True)
@@ -284,6 +285,7 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
+
                         if len(quantiles)>1:
                                 prob=prob.unsqueeze(1).expand_as(rmse_logits)
                                 loss_mse = criterion(rmse_logits, target)
@@ -379,10 +381,17 @@ if __name__ == "__main__":
 
                         B = inputs.size(0)
 
+                        inputs = normden.normalize(inputs)
+
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
 
-                        rmse_logits = normden.denormalize(rmse_logits)
+                        target = normden.normalize(target)
+
+                        # rmse_logits = normden.denormalize(rmse_logits)
+
+                        # print(f"RMSE LOGIT: {rmse_logits.max()} {rmse_logits.min()}")
+                        # print(f"TARGET: {target.max()} {target.min()}")
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
