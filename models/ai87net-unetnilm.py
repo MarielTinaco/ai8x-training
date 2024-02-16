@@ -111,7 +111,7 @@ class AI85CNN1DNiLM(nn.Module):
                  output_size=5,
                  d_model=64,
                  dropout=0.1, 
-                 seq_len=9,  
+                 seq_len=99,  
                  n_layers=5, 
                  n_quantiles=3, 
                  pool_filter=16,
