@@ -60,6 +60,7 @@ deterministic = True
 log_prefix = "ukdale-train"
 log_dir = "logs"
 validation_split = 0.1
+seq_len = 99
 print_freq = 10
 num_epochs = 2
 lr = 1e-4
