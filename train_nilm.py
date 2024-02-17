@@ -53,7 +53,7 @@ dataset_fn = nilm.ukdale_get_datasets
 model_name = "cnn1dnilm"
 num_classes = 5
 workers = 5
-batch_size = 128
+batch_size = 256
 data_path = "data/NILM/"
 deterministic = True
 log_prefix = "ukdale-train"
@@ -61,7 +61,7 @@ log_dir = "logs"
 validation_split = 0.1
 seq_len = 99
 print_freq = 10
-num_epochs = 2
+num_epochs = 50
 lr = 1e-4
 beta_1 = 0.999
 beta_2 = 0.98
@@ -145,14 +145,16 @@ class NormDen:
         #         return data.sub(0.5).mul(256.).round().clamp(min=-128, max=127).div(128.)
 
         def normalize(self, data):
+                # Data must be [self.mini,self.maxi]
                 data = (data - self.mini) / (self.maxi - self.mini)
                 data[data > 1] = 1
                 data[data < 0] = 0
                 return data.sub(0.5).mul(256.).round().clamp(min=-127, max=128).div(128.)
 
         def denormalize(self, data):
+                # Data must be [-1,1]
                 drange = self.maxi - self.mini
-                data = data * drange
+                data = (data/2 + 0.5) * drange
                 data = data + self.mini
                 return data
         
@@ -277,10 +279,11 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
                         # compute output from model
 
                         inputs = normden.normalize(inputs)
-                        target = normden.normalize(target)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
+
+                        rmse_logits = normden.denormalize(rmse_logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -381,10 +384,14 @@ if __name__ == "__main__":
                         B = inputs.size(0)
 
                         inputs = normden.normalize(inputs)
-                        target = normden.normalize(target)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
+
+                        # print(f"RMSE LOGITS:\t{rmse_logits.mean()} {rmse_logits.max()} {rmse_logits.min()}")
+                        # print(f"TARGET:\t{target.mean()} {target.max()} {target.min()}")
+
+                        rmse_logits = normden.denormalize(rmse_logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -456,11 +463,12 @@ if __name__ == "__main__":
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
 
                         inputs = normden.normalize(inputs)
-                        target = normden.normalize(target)
 
                         # Test
                         with torch.no_grad():
                                 logits, pred_power  = model(inputs)
+
+                        pred_power = normden.denormalize(pred_power)
 
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
