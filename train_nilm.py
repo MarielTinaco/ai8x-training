@@ -224,12 +224,12 @@ def test_epoch_end(outputs):
         state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
 
         for idx, app in enumerate(appliances):
-                power[:,idx] = (power[:, idx] * appliance_data[app]['std']) + appliance_data[app]['std']
+                power[:,idx] = (power[:, idx] * appliance_data[app]['std']) + appliance_data[app]['mean']
                 if len(quantiles)>=2:
-                        pred_power[:,:, idx] = (pred_power[:,:, idx] * appliance_data[app]['std']) + appliance_data[app]['std']
+                        pred_power[:,:, idx] = (pred_power[:,:, idx] * appliance_data[app]['std']) + appliance_data[app]['mean']
                         pred_power[:,:, idx] = np.where(pred_power[:,:, idx]<0, 0, pred_power[:,:, idx])
                 else:
-                        pred_power[:, idx] = (pred_power[:, idx] * appliance_data[app]['std']) + appliance_data[app]['std']
+                        pred_power[:, idx] = (pred_power[:, idx] * appliance_data[app]['std']) + appliance_data[app]['mean']
                         pred_power[:, idx] = np.where(pred_power[:, idx]<0, 0, pred_power[:, idx])    
 
         if len(quantiles)>=2:
