@@ -279,11 +279,10 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
                         # compute output from model
 
                         inputs = normden.normalize(inputs)
+                        target = normden.normalize(target)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
-
-                        rmse_logits = normden.denormalize(rmse_logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -384,14 +383,13 @@ if __name__ == "__main__":
                         B = inputs.size(0)
 
                         inputs = normden.normalize(inputs)
+                        target = normden.normalize(target)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
 
                         # print(f"RMSE LOGITS:\t{rmse_logits.mean()} {rmse_logits.max()} {rmse_logits.min()}")
                         # print(f"TARGET:\t{target.mean()} {target.max()} {target.min()}")
-
-                        rmse_logits = normden.denormalize(rmse_logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -467,8 +465,6 @@ if __name__ == "__main__":
                         # Test
                         with torch.no_grad():
                                 logits, pred_power  = model(inputs)
-
-                        pred_power = normden.denormalize(pred_power)
 
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
