@@ -180,7 +180,7 @@ print('Running on device: {}'.format(device))
 
 ai8x.set_device(device=85, simulate=False, round_avg=False)
 
-model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=3, n_quantiles=len(quantiles))
+model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=5, n_quantiles=len(quantiles))
 msglogger.info('model: %s',model)
 model = model.to(device)
 
