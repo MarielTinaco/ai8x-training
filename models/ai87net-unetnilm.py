@@ -142,67 +142,6 @@ class AI85CNN1DNiLM(nn.Module):
             
         return states_logits, power_logits
 
-class Conv1D(nn.Module):
-    
-    def __init__(self,
-                 num_channels,
-                 num_kernels,
-                 kernel_size=3,
-                 stride=1,
-                 padding=1,
-                 last=False,
-                 activation="ReLU",
-                 batchnorm="NoAffine",
-                 device="cuda:0",
-                 **kwargs):
-        super(Conv1D, self).__init__()
-        
-        if not last:
-            if activation == "ReLU":
-                self.net = ai8x.FusedConv1dBNReLU(in_channels=num_channels,
-                                                  out_channels=num_kernels,
-                                                  kernel_size=kernel_size,
-                                                  stride=stride,
-                                                  padding=padding,
-                                                  bias=True,
-                                                  batchnorm="NoAffine",
-                                                  **kwargs)
-            elif activation == "Abs":
-                self.net = ai8x.FusedConv1dBNAbs(in_channels=num_channels,
-                                                  out_channels=num_kernels,
-                                                  kernel_size=kernel_size,
-                                                  stride=stride,
-                                                  padding=padding,
-                                                  bias=True,
-                                                  batchnorm="NoAffine",
-                                                  **kwargs)
-            else:
-                self.net = ai8x.Conv1d(
-                    in_channels=num_channels,
-                    out_channels=num_kernels,
-                    kernel_size=kernel_size,
-                    stride=stride,
-                    padding=padding,
-                    batchnorm=batchnorm,
-                    **kwargs
-                )
-        else:
-            self.net = ai8x.Conv1d(
-                in_channels=num_channels,
-                out_channels=num_kernels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=padding,
-                batchnorm=batchnorm,
-                **kwargs
-            )
-
-        nn.utils.weight_norm(self.net.op.to(device))    
-        nn.init.xavier_uniform_(self.net.op.weight)
-        
-    def forward(self, x):
-        return self.net(x)
-
 class Encoder(nn.Module):
     def __init__(self, 
                  n_channels=10, 
@@ -214,11 +153,11 @@ class Encoder(nn.Module):
         self.feat_size = (seq_size-1) // 2**n_layers +1
         self.feat_dim = self.feat_size * n_kernels
         self.conv_stack = nn.Sequential(
-            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", last=False, device=device)] +
+            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", pooling="Max", last=False, device=device)] +
               [Conv1D(n_kernels//2**(n_layers-l),
-                         n_kernels//2**(n_layers-l-1), activation="ReLU", last=False, device=device)
+                         n_kernels//2**(n_layers-l-1), activation="ReLU", pooling="Max", last=False, device=device)
                for l in range(1, n_layers-1)] +
-              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", last=True, device=device)])
+              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", pooling="Max", last=True, device=device)])
         )
     def forward(self, x):
         assert len(x.size())==3
@@ -239,11 +178,11 @@ class MLPLayer(nn.Module):
         for i in range(len(layer_sizes)-1):
             layer = ai8x.FusedLinearReLU(layer_sizes[i], layer_sizes[i+1])
             self.layers.append(layer)
-           
+
         if output_size is not None:
             layer = ai8x.FusedLinearReLU(layer_sizes[-1], output_size)
             self.layers.append(layer)
-            
+
         self.init_weights()
         self.mlp_network =  nn.Sequential(*self.layers)
 
@@ -257,3 +196,140 @@ class MLPLayer(nn.Module):
                     nn.utils.weight_norm(layer)
                     nn.init.xavier_uniform_(layer.weight)
             except: pass
+
+
+class Conv1D(nn.Module):
+    
+    def __init__(self,
+                 num_channels,
+                 num_kernels,
+                 kernel_size=3,
+                 stride=1,
+                 padding=1,
+                 pooling="Max",
+                 activation="ReLU",
+                 batchnorm="NoAffine",
+                 last=False,
+                 device="cuda:0",
+                 **kwargs):
+        super(Conv1D, self).__init__()
+        
+        if not last:
+            if pooling == "Max":
+                if activation == "ReLU":
+                    self.net = ai8x.FusedMaxPoolConv1dBNReLU(in_channels=num_channels,
+                                                             out_channels=num_kernels,
+                                                             kernel_size=kernel_size,
+                                                             stride=stride,
+                                                             padding=padding,
+                                                             bias=True,
+                                                             batchnorm="NoAffine",
+                                                             **kwargs)
+                elif activation == "Abs":
+                    self.net = ai8x.FusedMaxPoolConv1dBNAbs(in_channels=num_channels,
+                                                            out_channels=num_kernels,
+                                                            kernel_size=kernel_size,
+                                                            stride=stride,
+                                                            padding=padding,
+                                                            bias=True,
+                                                            batchnorm="NoAffine",
+                                                            **kwargs)
+                else:
+                    self.net = ai8x.FusedMaxPoolConv1d(in_channels=num_channels,
+                                                       out_channels=num_kernels,
+                                                       kernel_size=kernel_size,
+                                                       stride=stride,
+                                                       padding=padding,
+                                                       batchnorm=batchnorm,
+                                                       **kwargs)
+            elif pooling == "Avg":
+                if activation == "ReLU":
+                    self.net = ai8x.FusedAvgPoolConv1dBNReLU(in_channels=num_channels,
+                                                             out_channels=num_kernels,
+                                                             kernel_size=kernel_size,
+                                                             stride=stride,
+                                                             padding=padding,
+                                                             bias=True,
+                                                             batchnorm="NoAffine",
+                                                             **kwargs)
+                elif activation == "Abs":
+                    self.net = ai8x.FusedAvgPoolConv1dBNAbs(in_channels=num_channels,
+                                                            out_channels=num_kernels,
+                                                            kernel_size=kernel_size,
+                                                            stride=stride,
+                                                            padding=padding,
+                                                            bias=True,
+                                                            batchnorm="NoAffine",
+                                                            **kwargs)
+                else:
+                    self.net = ai8x.FusedAvgPoolConv1d(in_channels=num_channels,
+                                                       out_channels=num_kernels,
+                                                       kernel_size=kernel_size,
+                                                       stride=stride,
+                                                       padding=padding,
+                                                       batchnorm=batchnorm,
+                                                    **kwargs)
+            else:
+                if activation == "ReLU":
+                    self.net = ai8x.FusedConv1dBNReLU(in_channels=num_channels,
+                                                      out_channels=num_kernels,
+                                                      kernel_size=kernel_size,
+                                                      stride=stride,
+                                                      padding=padding,
+                                                      bias=True,
+                                                      batchnorm="NoAffine",
+                                                      **kwargs)
+                elif activation == "Abs":
+                    self.net = ai8x.FusedConv1dBNAbs(in_channels=num_channels,
+                                                    out_channels=num_kernels,
+                                                    kernel_size=kernel_size,
+                                                    stride=stride,
+                                                    padding=padding,
+                                                    bias=True,
+                                                    batchnorm="NoAffine",
+                                                    **kwargs)
+                else:
+                    self.net = ai8x.FusedAvgPoolConv1d(in_channels=num_channels,
+                                                       out_channels=num_kernels,
+                                                       kernel_size=kernel_size,
+                                                       stride=stride,
+                                                       padding=padding,
+                                                       batchnorm=batchnorm,
+                                                       **kwargs
+                    )
+        else:
+            if pooling == "Max":
+                self.net = ai8x.FusedMaxPoolConv1d(in_channels=num_channels,
+                                                   out_channels=num_kernels,
+                                                   kernel_size=kernel_size,
+                                                   stride=stride,
+                                                   padding=padding,
+                                                   batchnorm=batchnorm,
+                                                   **kwargs
+                )
+            elif pooling == "Avg":
+                self.net = ai8x.FusedAvgPoolConv1d(
+                    in_channels=num_channels,
+                    out_channels=num_kernels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    batchnorm=batchnorm,
+                    **kwargs
+                )
+            else:
+                self.net = ai8x.Conv1d(
+                    in_channels=num_channels,
+                    out_channels=num_kernels,
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                    batchnorm=batchnorm,
+                    **kwargs
+                )
+
+        nn.utils.weight_norm(self.net.op.to(device))    
+        nn.init.xavier_uniform_(self.net.op.weight)
+        
+    def forward(self, x):
+        return self.net(x)
