@@ -279,13 +279,13 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
                         # compute output from model
 
-                        inputs = normden.normalize(inputs)
+                        # inputs = normden.normalize(inputs)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
 
-                        rmse_logits = normden.denormalize(rmse_logits)
-                        logits = normden.denormalize(logits)
+                        # rmse_logits = normden.denormalize(rmse_logits)
+                        # logits = normden.denormalize(logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -341,20 +341,20 @@ if __name__ == "__main__":
         # training loop
         for epoch in range(num_epochs):
 
-                if epoch > 0 and epoch == qat_policy['start_epoch']:
-                        print('QAT is starting!')
-                        # Fuse the BN parameters into conv layers before Quantization 
-                        ai8x.fuse_bn_layers(model)
+                # if epoch > 0 and epoch == qat_policy['start_epoch']:
+                #         print('QAT is starting!')
+                #         # Fuse the BN parameters into conv layers before Quantization 
+                #         ai8x.fuse_bn_layers(model)
                 
-                        # Switch model from unquantized to quantized for QAT
-                        ai8x.initiate_qat(model, qat_policy)
+                #         # Switch model from unquantized to quantized for QAT
+                #         ai8x.initiate_qat(model, qat_policy)
 
-                        # Model is re-transferred to GPU in case parameters were added
-                        model.to(device)
+                #         # Model is re-transferred to GPU in case parameters were added
+                #         model.to(device)
 
-                        # Empty the performance scores list for QAT operation
-                        perf_scores_history = []
-                        name = f'{model_name}_qat'
+                #         # Empty the performance scores list for QAT operation
+                #         perf_scores_history = []
+                #         name = f'{model_name}_qat'
                 
                 # store loss and training stats
                 losses = {'objective_loss': tnt.AverageValueMeter()}
@@ -385,7 +385,7 @@ if __name__ == "__main__":
 
                         B = inputs.size(0)
 
-                        inputs = normden.normalize(inputs)
+                        # inputs = normden.normalize(inputs)
 
                         # forward pass and loss calculation
                         logits, rmse_logits = model(inputs)
@@ -393,8 +393,8 @@ if __name__ == "__main__":
                         # print(f"RMSE LOGITS:\t{rmse_logits.mean()} {rmse_logits.max()} {rmse_logits.min()}")
                         # print(f"TARGET:\t{target.mean()} {target.max()} {target.min()}")
 
-                        rmse_logits = normden.denormalize(rmse_logits)
-                        logits = normden.denormalize(logits)
+                        # rmse_logits = normden.denormalize(rmse_logits)
+                        # logits = normden.denormalize(logits)
 
                         prob, pred = torch.max(F.softmax(logits, 1), 1)
                         loss_nll   = F.nll_loss(F.log_softmax(logits, 1), states)
@@ -465,14 +465,14 @@ if __name__ == "__main__":
 
                         inputs, target, states = inputs.to(device), target.to(device), states.to(device)
 
-                        inputs = normden.normalize(inputs)
+                        # inputs = normden.normalize(inputs)
 
                         # Test
                         with torch.no_grad():
                                 logits, pred_power  = model(inputs)
 
-                        pred_power = normden.denormalize(pred_power)
-                        logits = normden.denormalize(logits)
+                        # pred_power = normden.denormalize(pred_power)
+                        # logits = normden.denormalize(logits)
 
                         prob, pred_state = torch.max(F.softmax(logits, 1), 1)
                         if len(quantiles)>1:
