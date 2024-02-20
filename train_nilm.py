@@ -341,20 +341,20 @@ if __name__ == "__main__":
         # training loop
         for epoch in range(num_epochs):
 
-                # if epoch > 0 and epoch == qat_policy['start_epoch']:
-                #         print('QAT is starting!')
-                #         # Fuse the BN parameters into conv layers before Quantization 
-                #         ai8x.fuse_bn_layers(model)
+                if epoch > 0 and epoch == qat_policy['start_epoch']:
+                        print('QAT is starting!')
+                        # Fuse the BN parameters into conv layers before Quantization 
+                        ai8x.fuse_bn_layers(model)
                 
-                #         # Switch model from unquantized to quantized for QAT
-                #         ai8x.initiate_qat(model, qat_policy)
+                        # Switch model from unquantized to quantized for QAT
+                        ai8x.initiate_qat(model, qat_policy)
 
-                #         # Model is re-transferred to GPU in case parameters were added
-                #         model.to(device)
+                        # Model is re-transferred to GPU in case parameters were added
+                        model.to(device)
 
-                #         # Empty the performance scores list for QAT operation
-                #         perf_scores_history = []
-                #         name = f'{model_name}_qat'
+                        # Empty the performance scores list for QAT operation
+                        perf_scores_history = []
+                        name = f'{model_name}_qat'
                 
                 # store loss and training stats
                 losses = {'objective_loss': tnt.AverageValueMeter()}
@@ -495,7 +495,7 @@ if __name__ == "__main__":
 
                 is_best = True
 
-                apputils.save_checkpoint(epoch, model_name, model, optimizer=optimizer,
+                apputils.save_checkpoint(epoch, name, model, optimizer=optimizer,
                                                 scheduler=compression_scheduler, extras={},
                                                 is_best=is_best, name=name,
                                                 dir=msglogger.logdir)
