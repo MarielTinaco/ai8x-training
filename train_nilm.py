@@ -62,6 +62,8 @@ validation_split = 0.1
 seq_len = 99
 print_freq = 10
 num_epochs = 50
+dropout=0.25
+pool_filter = 8
 lr = 1e-4
 beta_1 = 0.999
 beta_2 = 0.98
@@ -181,7 +183,7 @@ print('Running on device: {}'.format(device))
 
 ai8x.set_device(device=85, simulate=False, round_avg=False)
 
-model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=5, n_quantiles=len(quantiles))
+model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=5, d_model=128, n_quantiles=len(quantiles), dropout=dropout, pool_filter=pool_filter)
 msglogger.info('model: %s',model)
 model = model.to(device)
 
