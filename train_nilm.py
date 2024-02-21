@@ -486,14 +486,15 @@ if __name__ == "__main__":
 
 
                 outputs = test_epoch_end(outputs)
-                print(outputs)
+
+                msglogger.info('--- test (epoch=%d)-----------', epoch)
+                msglogger.info(str(outputs))
 
                 # after a training epoch, do validation
                 msglogger.info('--- validate (epoch=%d)-----------', epoch)
 
                 validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
-
-                print (validation_logs)
+                msglogger.info(str(validation_logs))
 
                 is_best = True
 
@@ -503,9 +504,12 @@ if __name__ == "__main__":
                                                 dir=msglogger.logdir)
 
                 ms_lr_scheduler.step(metrics=validation_logs["log"]["val_loss"])
+                
+                # NOTE: Uncomment if using MultiStepLR scheduler
                 # ms_lr_scheduler.step()
 
         validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
+        msglogger.info('--- validate (epoch=%d)-----------', epoch)
+        msglogger.info(str(validation_logs))
 
-        print(validation_logs)
         
