@@ -70,6 +70,8 @@ beta_1 = 0.999
 beta_2 = 0.98
 quantiles = [0.0025,0.1, 0.5, 0.9, 0.975]
 patience_scheduler = 5
+qat_policy = {'start_epoch':10,
+              'weight_bits':8}
 appliance_data = {
     "kettle": {
         "mean": 700,
@@ -212,8 +214,6 @@ ms_lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=patie
 
 criterion = QuantileLoss(quantiles=quantiles).to(device)
 
-qat_policy = {'start_epoch':10,
-              'weight_bits':8}
 msglogger.info('qat policy: %s',qat_policy)
 compression_scheduler = distiller.CompressionScheduler(model)
 
