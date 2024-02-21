@@ -12,6 +12,7 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import operator
 
 from torch import nn
 from pathlib import Path
@@ -485,6 +486,13 @@ if __name__ == "__main__":
                         outputs.append(logs)
 
 
+                perf_scores_history.append(distiller.MutableNamedTuple({'val_loss': validation_logs["log"]["val_loss"],
+                                                                'epoch': epoch}))
+                # # Keep perf_scores_history sorted from best to worst
+                # # Sort by top1 as main sort key, then sort by top5 and epoch
+                # perf_scores_history.sort(key=operator.attrgetter('top1', 'top5', 'epoch'),reverse=True)
+                perf_scores_history.sort(key=operator.attrgetter('val_loss', 'epoch'))
+
                 outputs = test_epoch_end(outputs)
 
                 msglogger.info('--- test (epoch=%d)-----------', epoch)
@@ -496,7 +504,7 @@ if __name__ == "__main__":
                 validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
                 msglogger.info(str(validation_logs))
 
-                is_best = True
+                is_best = epoch == perf_scores_history[0].epoch
 
                 apputils.save_checkpoint(epoch, name, model, optimizer=optimizer,
                                                 scheduler=compression_scheduler, extras={},
