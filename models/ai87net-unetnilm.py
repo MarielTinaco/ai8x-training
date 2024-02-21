@@ -109,7 +109,7 @@ class AI85UNetNILM(nn.Module):
 class AI85CNN1DNiLM(nn.Module):
     def __init__(self, in_size=1, 
                  output_size=5,
-                 d_model=128,
+                 d_model=64,
                  dropout=0.1, 
                  seq_len=99,
                  n_layers=5, 
