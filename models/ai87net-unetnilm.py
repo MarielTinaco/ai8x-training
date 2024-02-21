@@ -109,19 +109,19 @@ class AI85UNetNILM(nn.Module):
 class AI85CNN1DNiLM(nn.Module):
     def __init__(self, in_size=1, 
                  output_size=5,
-                 d_model=64,
+                 d_model=128,
                  dropout=0.1, 
-                 seq_len=99,  
+                 seq_len=99,
                  n_layers=5, 
                  n_quantiles=3, 
                  pool_filter=16,
                  device="cuda:0"):
         super(AI85CNN1DNiLM, self).__init__()
 
-        self.dropout = nn.Dropout(dropout)
         self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len, device=device)
         self.pool_filter = pool_filter
         self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None)
+        self.dropout = nn.Dropout(dropout)
         self.n_quantiles = n_quantiles
         
         self.fc_out_state  = ai8x.Linear(1024, output_size*2, bias=True)
@@ -174,7 +174,7 @@ class MLPLayer(nn.Module):
         self.output_size = output_size
         layer_sizes = [in_size] + [x for x in hidden_arch]
         self.layers = []
-        
+
         for i in range(len(layer_sizes)-1):
             layer = ai8x.FusedLinearReLU(layer_sizes[i], layer_sizes[i+1])
             self.layers.append(layer)
