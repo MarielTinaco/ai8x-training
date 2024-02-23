@@ -311,12 +311,15 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
 
                         steps_completed = (validation_step+1)
                         if steps_completed % print_freq == 0 or steps_completed == total_steps:
-                                stats = ('',
-                                        OrderedDict([('Loss', losses['objective_loss'].mean),])
-                                )
-                                distiller.log_training_progress(stats, None, epoch, steps_completed,
-                                                                total_steps, print_freq, loggers)
-                                
+                                stats = ('Performance/Validation/',
+                                        OrderedDict([('Loss', losses['objective_loss'].mean),('Time', batch_time.mean)]))
+                                params = None
+                                distiller.log_training_progress(stats,
+                                                                params,
+                                                                epoch, steps_completed,
+                                                                steps_per_epoch, print_freq,
+                                                                all_loggers)
+
                         outputs.append(logs)
         
         # OPTIONAL
