@@ -70,7 +70,7 @@ beta_1 = 0.999
 beta_2 = 0.98
 quantiles = [0.0025,0.1, 0.5, 0.9, 0.975]
 patience_scheduler = 5
-qat_policy = {'start_epoch':10,
+qat_policy = {'start_epoch':51,
               'weight_bits':8}
 appliance_data = {
     "kettle": {
@@ -78,32 +78,42 @@ appliance_data = {
         "std": 1000,
         'window':10,
         'on_power_threshold': 2000,
-        'max_on_power': 3998
+        'max_on_power': 3998,
+        'min': 0.0,
+        'max': 2578.0,
     },
     "fridge": {
         "mean": 200,
         "std": 400,
         "window":50,
         'on_power_threshold': 50,
+        'min' : 0.0,
+        'max' : 1856.0,
     },
     "dish washer": {
         "mean": 700,
         "std": 700,
         "window":50,
-        'on_power_threshold': 10
+        'on_power_threshold': 10,
+        'max': 2412.0,
+        'min' : 0.0,
     },
     "washer dryer": {
         "mean": 400,
         "std": 700,
         "window":50,
         'on_power_threshold': 20,
-        'max_on_power': 3999
+        'max_on_power': 3999,
+        'max': 2105.0,
+        'min': 0.0
     },
     "microwave": {
         "mean": 500,
         "std": 800,
         "window":10,
         'on_power_threshold': 200,
+        'max': 3180.0,
+        'min': 0.0
     },
 }
 appliances = list(appliance_data.keys())
@@ -246,9 +256,45 @@ def test_epoch_end(outputs):
                                                                         power, y_pred,
                                                                         appliances, 
                                                                         dataset_name.upper())  
-        logs = {"pred_power":pred_power, 
+        logs = {"pred_power":pred_power.astype(np.uint32), 
                 "pred_state":pred_state, 
-                "power":power, 
+                "power":power.astype(np.uint32), 
+                "state":state,  
+                'app_results':per_app_results, 
+                'avg_results':avg_results} 
+        
+        return logs   
+
+def test_epoch_end_norm(outputs):
+        
+        # appliance_data = {'fridge': {'window': 50, 'mean': 40.158577, 'std': 53.56288}, 'washer dryer': {'window': 50, 'mean': 27.768433, 'std': 212.51971}, 'kettle': {'window': 10, 'mean': 16.753872, 'std': 191.05873}, 'dish washer': {'window': 50, 'mean': 27.384077, 'std': 239.23492}, 'microwave': {'window': 10, 'mean': 8.35921, 'std': 105.1099}}
+        pred_power = torch.cat([x['pred_power'] for x in outputs], 0).cpu().numpy()
+        pred_state = torch.cat([x['pred_state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+        power = torch.cat([x['power'] for x in outputs], 0).cpu().numpy()
+        state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+
+        for idx, app in enumerate(appliances):
+                power[:,idx] = (power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                if len(quantiles)>=2:
+                        pred_power[:,:, idx] = (pred_power[:,:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                        pred_power[:,:, idx] = np.where(pred_power[:,:, idx]<0, 0, pred_power[:,:, idx])
+                else:
+                        pred_power[:, idx] = (pred_power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                        pred_power[:, idx] = np.where(pred_power[:, idx]<0, 0, pred_power[:, idx])    
+
+        if len(quantiles)>=2:
+                idx = len(quantiles)//2
+                y_pred = pred_power[:,idx]
+        else:
+                y_pred = pred_power 
+                
+        per_app_results, avg_results = get_results_summary(state, pred_state, 
+                                                                        power, y_pred,
+                                                                        appliances, 
+                                                                        dataset_name.upper())  
+        logs = {"pred_power":pred_power.astype(np.uint32), 
+                "pred_state":pred_state, 
+                "power":power.astype(np.uint32), 
                 "state":state,  
                 'app_results':per_app_results, 
                 'avg_results':avg_results} 
@@ -490,7 +536,7 @@ if __name__ == "__main__":
 
                 msglogger.info('--- test (epoch=%d)-----------', epoch)
 
-                outputs = test_epoch_end(outputs)
+                outputs = test_epoch_end_norm(outputs)
                 msglogger.info(str(outputs))
 
                 # after a training epoch, do validation
