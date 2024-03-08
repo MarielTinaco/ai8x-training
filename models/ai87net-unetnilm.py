@@ -139,7 +139,7 @@ class AI85CNN1DNiLM(nn.Module):
         power_logits    = self.fc_out_power(mlp_out)
         if self.n_quantiles>1:
             power_logits = power_logits.reshape(B, self.n_quantiles, -1)
-            
+
         return states_logits, power_logits
 
 class Encoder(nn.Module):
@@ -176,11 +176,11 @@ class MLPLayer(nn.Module):
         self.layers = []
 
         for i in range(len(layer_sizes)-1):
-            layer = ai8x.FusedLinearReLU(layer_sizes[i], layer_sizes[i+1])
+            layer = ai8x.Linear(layer_sizes[i], layer_sizes[i+1])
             self.layers.append(layer)
 
         if output_size is not None:
-            layer = ai8x.FusedLinearReLU(layer_sizes[-1], output_size)
+            layer = ai8x.Linear(layer_sizes[-1], output_size)
             self.layers.append(layer)
 
         self.init_weights()
@@ -192,7 +192,7 @@ class MLPLayer(nn.Module):
     def init_weights(self):
         for layer in self.layers:
             try:
-                if isinstance(layer, ai8x.FusedLinearReLU):
+                if isinstance(layer, ai8x.Linear):
                     nn.utils.weight_norm(layer)
                     nn.init.xavier_uniform_(layer.weight)
             except: pass

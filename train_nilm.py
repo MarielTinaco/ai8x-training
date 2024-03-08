@@ -62,15 +62,17 @@ log_dir = "logs"
 validation_split = 0.1
 seq_len = 99
 print_freq = 10
-num_epochs = 50
+num_epochs = 75
 dropout=0.25
+n_layers=3
 pool_filter = 8
+d_model = 128
 lr = 1e-4
 beta_1 = 0.999
 beta_2 = 0.98
 quantiles = [0.0025,0.1, 0.5, 0.9, 0.975]
 patience_scheduler = 5
-qat_policy = {'start_epoch':51,
+qat_policy = {'start_epoch':100,
               'weight_bits':8}
 appliance_data = {
     "kettle": {
@@ -196,7 +198,7 @@ print('Running on device: {}'.format(device))
 
 ai8x.set_device(device=85, simulate=False, round_avg=False)
 
-model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=5, d_model=128, n_quantiles=len(quantiles), dropout=dropout, pool_filter=pool_filter)
+model = mod.AI85CNN1DNiLM(in_size=1, output_size=5, n_layers=n_layers, d_model=d_model, n_quantiles=len(quantiles), dropout=dropout, pool_filter=pool_filter)
 msglogger.info('model: %s',model)
 model = model.to(device)
 
