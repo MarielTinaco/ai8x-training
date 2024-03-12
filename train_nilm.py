@@ -62,7 +62,7 @@ log_dir = "logs"
 validation_split = 0.1
 seq_len = 99
 print_freq = 10
-num_epochs = 60
+num_epochs = 100
 dropout=0.25
 n_layers=3
 pool_filter = 8
@@ -72,7 +72,7 @@ beta_1 = 0.999
 beta_2 = 0.98
 quantiles = [0.0025,0.1, 0.5, 0.9, 0.975]
 patience_scheduler = 5
-qat_policy = {'start_epoch':100,
+qat_policy = {'start_epoch':101,
               'weight_bits':8}
 appliance_data = {
     "kettle": {
@@ -82,23 +82,23 @@ appliance_data = {
         'on_power_threshold': 2000,
         'max_on_power': 3998,
         'min': 0.0,
-        'max': 2578.0,
+        'max': 2439.0,
     },
     "fridge": {
         "mean": 200,
         "std": 400,
         "window":50,
         'on_power_threshold': 50,
-        'min' : 0.0,
-        'max' : 1856.0,
+        'min': 0.0,
+        'max': 2439.0,
     },
     "dish washer": {
         "mean": 700,
         "std": 700,
         "window":50,
         'on_power_threshold': 10,
-        'max': 2412.0,
-        'min' : 0.0,
+        'min': 0.0,
+        'max': 2439.0,
     },
     "washer dryer": {
         "mean": 400,
@@ -106,16 +106,16 @@ appliance_data = {
         "window":50,
         'on_power_threshold': 20,
         'max_on_power': 3999,
-        'max': 2105.0,
-        'min': 0.0
+        'min': 0.0,
+        'max': 2439.0,
     },
     "microwave": {
         "mean": 500,
         "std": 800,
         "window":10,
         'on_power_threshold': 200,
-        'max': 3180.0,
-        'min': 0.0
+        'min': 0.0,
+        'max': 2439.0,
     },
 }
 appliances = list(appliance_data.keys())
