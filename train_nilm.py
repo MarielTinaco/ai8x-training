@@ -75,48 +75,54 @@ patience_scheduler = 5
 qat_policy = {'start_epoch':101,
               'weight_bits':8}
 appliance_data = {
-    "kettle": {
-        "mean": 700,
-        "std": 1000,
-        'window':10,
-        'on_power_threshold': 2000,
-        'max_on_power': 3998,
-        'min': 0.0,
-        'max': 2439.0,
-    },
     "fridge": {
-        "mean": 200,
-        "std": 400,
-        "window":50,
-        'on_power_threshold': 50,
-        'min': 0.0,
-        'max': 2439.0,
-    },
-    "dish washer": {
-        "mean": 700,
-        "std": 700,
-        "window":50,
-        'on_power_threshold': 10,
-        'min': 0.0,
-        'max': 2439.0,
+        "filter_window": 50,
+        "window": [
+            3,
+            3
+        ],
+        "mode": "tail",
+        "min": 0.0,
+        "max": 258.0,
+        "on_power_threshold": 50,
+        "Total collected sequences": 15573
     },
     "washer dryer": {
-        "mean": 400,
-        "std": 700,
-        "window":50,
-        'on_power_threshold': 20,
-        'max_on_power': 3999,
-        'min': 0.0,
-        'max': 2439.0,
+        "filter_window": 50,
+        "window": 23,
+        "mode": "adaptive",
+        "min": 0.0,
+        "max": 2055.0,
+        "on_power_threshold": 20,
+        "Total collected sequences": 3130
+    },
+    "kettle": {
+        "filter_window": 50,
+        "window": 5,
+        "mode": "adaptive",
+        "min": 0.0,
+        "max": 2413.0,
+        "on_power_threshold": 10,
+        "Total collected sequences": 3286
+    },
+    "dish washer": {
+        "filter_window": 10,
+        "window": 70,
+        "mode": "adaptive",
+        "min": 0.0,
+        "max": 2439.0,
+        "on_power_threshold": 10,
+        "Total collected sequences": 3160
     },
     "microwave": {
-        "mean": 500,
-        "std": 800,
-        "window":10,
-        'on_power_threshold': 200,
-        'min': 0.0,
-        'max': 2439.0,
-    },
+        "filter_window": 50,
+        "window": 3,
+        "mode": "adaptive",
+        "min": 0.0,
+        "max": 1570.0,
+        "on_power_threshold": 200,
+        "Total collected sequences": 3404
+    }
 }
 appliances = list(appliance_data.keys())
 
