@@ -584,5 +584,6 @@ if __name__ == "__main__":
         pred_outputs = test_epoch_end_norm(validation_logs_and_output['outputs'])
 
         np.save(os.path.join(msglogger.logdir, 'results.npy'), pred_outputs)
+        np.save(os.path.join(msglogger.logdir, 'unprocessed_results.npy'), validation_logs_and_output['outputs'])
 
         
