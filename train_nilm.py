@@ -307,7 +307,7 @@ def test_epoch_end_norm(outputs):
                 'app_results':per_app_results, 
                 'avg_results':avg_results} 
         
-        return logs   
+        return logs
 
 def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
         """Execute the validation/test loop."""
@@ -325,6 +325,7 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
         msglogger.info('%d samples (%d per mini-batch)', total_samples, batch_size)
 
         outputs = []
+        pred_outputs = []
 
         # Switch to evaluation mode
         model.eval()
@@ -363,6 +364,9 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
 
                         losses['objective_loss'].add(loss.item())
 
+                        pred_logs = {"pred_power":rmse_logits, "pred_state":pred, "power":target, "state":states}
+                        pred_outputs.append(pred_logs)
+
                         steps_completed = (validation_step+1)
                         if steps_completed % print_freq == 0 or steps_completed == total_steps:
                                 stats = ('Performance/Validation/',
@@ -382,7 +386,7 @@ def validate(data_loader, model, criterion, loggers, epoch=-1, tflogger=None):
         avg_rmse = np.mean([x['mae'].item() for x in outputs])
         logs = {'val_loss': avg_loss, "val_F1": avg_f1, "val_mae":avg_rmse}
         
-        return {'log':logs}
+        return {'log':logs, 'outputs':pred_outputs}
         
 
 if __name__ == "__main__":
@@ -572,8 +576,13 @@ if __name__ == "__main__":
                 # NOTE: Uncomment if using MultiStepLR scheduler
                 # ms_lr_scheduler.step()
 
-        validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
+
+        validation_logs_and_output = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
         msglogger.info('--- validate (epoch=%d)-----------', epoch)
-        msglogger.info(str(validation_logs))
+        msglogger.info(str(validation_logs_and_output))
+
+        pred_outputs = test_epoch_end_norm(validation_logs_and_output['outputs'])
+
+        np.save(os.path.join(msglogger.logdir, 'results.npy'), pred_outputs)
 
         
