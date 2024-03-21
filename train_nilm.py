@@ -5,6 +5,7 @@ import os
 import sys
 import datetime
 import time
+import json
 
 import importlib
 import numpy as np
@@ -49,6 +50,7 @@ from torchmetrics.functional import f1_score
 from unetnilm.metrics import get_results_summary
 from unetnilm.utils import QuantileLoss
 
+profile_name = "unetnilm_ukdale_20240321_155419/"
 dataset_name = "ukdale"
 dataset_fn = nilm.ukdale_get_datasets
 model_name = "cnn1dnilm"
@@ -74,57 +76,12 @@ quantiles = [0.0025,0.1, 0.5, 0.9, 0.975]
 patience_scheduler = 5
 qat_policy = {'start_epoch':101,
               'weight_bits':8}
-appliance_data = {
-    "fridge": {
-        "filter_window": 50,
-        "window": [
-            3,
-            3
-        ],
-        "mode": "tail",
-        "min": 0.0,
-        "max": 258.0,
-        "on_power_threshold": 50,
-        "Total collected sequences": 15573
-    },
-    "washer dryer": {
-        "filter_window": 50,
-        "window": 23,
-        "mode": "adaptive",
-        "min": 0.0,
-        "max": 2055.0,
-        "on_power_threshold": 20,
-        "Total collected sequences": 3130
-    },
-    "kettle": {
-        "filter_window": 50,
-        "window": 5,
-        "mode": "adaptive",
-        "min": 0.0,
-        "max": 2413.0,
-        "on_power_threshold": 10,
-        "Total collected sequences": 3286
-    },
-    "dish washer": {
-        "filter_window": 10,
-        "window": 70,
-        "mode": "adaptive",
-        "min": 0.0,
-        "max": 2439.0,
-        "on_power_threshold": 10,
-        "Total collected sequences": 3160
-    },
-    "microwave": {
-        "filter_window": 50,
-        "window": 3,
-        "mode": "adaptive",
-        "min": 0.0,
-        "max": 1570.0,
-        "on_power_threshold": 200,
-        "Total collected sequences": 3404
-    }
-}
-appliances = list(appliance_data.keys())
+
+with open(f"data/NILM/ukdale/{profile_name}/metadata.json") as infile:
+        metadata = json.load(infile)
+
+appliance_data = metadata["appliance_data"]
+appliances = metadata["appliances"]
 
 #####################################################################################
 
@@ -555,7 +512,7 @@ if __name__ == "__main__":
                 msglogger.info('--- validate (epoch=%d)-----------', epoch)
 
                 validation_logs = validate(val_loader, model, criterion, [pylogger], epoch, tflogger)
-                msglogger.info(str(validation_logs))
+                msglogger.info(str(validation_logs['log']))
 
                 perf_scores_history.append(distiller.MutableNamedTuple({'val_loss': validation_logs["log"]["val_loss"],
                                                                 'epoch': epoch}))

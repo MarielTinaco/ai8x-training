@@ -8,21 +8,31 @@ from pathlib import Path
 
 import ai8x
 
+PROFILE_NAME = "unetnilm_ukdale_20240321_155419"
+EXTENSION_MODE = "randomizer"
+
 def split_ukdale(data):
-    split_1 = int(0.60 * len(data))
-    split_2 = int(0.85 * len(data))
-    train = data[:split_1]
-    validation = data[split_1:split_2]
-    test = data[split_2:]
+    if EXTENSION_MODE == "appender":
+        split_1 = int(0.15 * len(data))
+        split_2 = int(0.75 * len(data))
+        validation = data[:split_1]
+        train = data[split_1:split_2]
+        test = data[split_2:]
+    else:
+        split_1 = int(0.60 * len(data))
+        split_2 = int(0.85 * len(data))
+        train = data[:split_1]
+        validation = data[split_1:split_2]
+        test = data[split_2:]
     return train, validation, test
 
 def load_data(data_path, data_type="training", sample=None, data="ukdale", denoise=False):
     if denoise:
-        x = np.load(data_path+f"/{data}/{data_type}/denoise_inputs.npy")
+        x = np.load(data_path+f"/{data}/{PROFILE_NAME}/{data_type}/denoise_inputs.npy")
     else:
-        x = np.load(data_path+f"/{data}/{data_type}/noise_inputs.npy")
-    y = np.load(data_path+f"/{data}/{data_type}/targets.npy")
-    z = np.load(data_path+f"/{data}/{data_type}/states.npy")
+        x = np.load(data_path+f"/{data}/{PROFILE_NAME}/{data_type}/noise_inputs.npy")
+    y = np.load(data_path+f"/{data}/{PROFILE_NAME}/{data_type}/targets.npy")
+    z = np.load(data_path+f"/{data}/{PROFILE_NAME}/{data_type}/states.npy")
     if sample is None:
         return x, y, z
     else:
@@ -55,11 +65,11 @@ class Dataset(torch.utils.data.Dataset):
 
 class UkdaleDataset(Dataset):
 
-    def __init__(self, root_dir, d_type, transform=None, seq_len=99, denoise=False):
+    def __init__(self, root_dir, d_type, transform=None, seq_len=99, denoise=False, data_type="training"):
         
         inputs, targets, states = load_data(data_path=str(root_dir),
                                 data="ukdale",
-                                data_type="training",
+                                data_type=data_type,
                                 denoise=denoise
                                 )
         inputs_train, inputs_val, inputs_test = split_ukdale(inputs)
