@@ -117,26 +117,47 @@ class NILMnet(object):
                                   dropout=hparams.dropout,
                                   pool_filter=hparams.pool_filter)
 
+                elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
+                        self.model = mod.AI85CNN1DNiLMStates(in_size=1, 
+                                  output_size=self.num_classes, 
+                                  n_layers=hparams.n_layers, 
+                                  d_model=hparams.d_model, 
+                                  n_quantiles=len(hparams.quantiles), 
+                                  dropout=hparams.dropout,
+                                  pool_filter=hparams.pool_filter)
+
         def _step(self, batch):
                 x, y, z = batch
                 B = x.size(0)
-                logits, rmse_logits = self.model(x)
-                prob, pred = torch.max(F.softmax(logits, 1), 1)
-                loss_nll   = F.nll_loss(F.log_softmax(logits, 1), z)
-                
-                if len(self.hparams.quantiles)>1:
-                        prob=prob.unsqueeze(1).expand_as(rmse_logits)
-                        loss_mse = self.criterion(rmse_logits, y)
-                        mae_score = F.l1_loss(rmse_logits,y.unsqueeze(1).expand_as(rmse_logits))
-                else:    
-                        loss_mse = F.mse_loss(rmse_logits, y)
-                        mae_score = F.l1_loss(rmse_logits, y)
-                
-                loss = loss_nll + loss_mse
-                
-                res = f1_score(pred, z, task="multiclass", num_classes=self.num_classes)
-                logs = {"nlloss":loss_nll, "mseloss":loss_mse,
-                        "mae":mae_score, "F1": res}
+                if self.hparams.model in set(["cnn1dnilm", "ai851dnilm", None]):
+                        logits, rmse_logits = self.model(x)
+                        prob, pred = torch.max(F.softmax(logits, 1), 1)
+                        loss_nll   = F.nll_loss(F.log_softmax(logits, 1), z)
+                        
+                        if len(self.hparams.quantiles)>1:
+                                prob=prob.unsqueeze(1).expand_as(rmse_logits)
+                                loss_mse = self.criterion(rmse_logits, y)
+                                mae_score = F.l1_loss(rmse_logits,y.unsqueeze(1).expand_as(rmse_logits))
+                        else:    
+                                loss_mse = F.mse_loss(rmse_logits, y)
+                                mae_score = F.l1_loss(rmse_logits, y)
+                        
+                        loss = loss_nll + loss_mse
+
+                        res = f1_score(pred, z, task="multiclass", num_classes=self.num_classes)
+                        logs = {"nlloss":loss_nll, "mseloss":loss_mse,
+                                "mae":mae_score, "F1": res}
+
+                elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
+                        logits = self.model(x)
+                        prob, pred = torch.max(F.softmax(logits, 1), 1)
+                        loss_nll   = F.nll_loss(F.log_softmax(logits, 1), z)
+
+                        loss = loss_nll
+
+                        res = f1_score(pred, z, task="multiclass", num_classes=self.num_classes)
+                        logs = {"nlloss" : loss_nll, "F1" : res}
+
                 return loss, logs
 
         def training_step(self, batch, batch_idx):
@@ -154,59 +175,82 @@ class NILMnet(object):
                 x, y, z = batch
                 B = x.size(0)
 
-                with torch.no_grad():
-                        logits, pred_power  = self.model(x)
-                
-                prob, pred_state = torch.max(F.softmax(logits, 1), 1)
-                if len(self.hparams.quantiles)>1:
-                        prob=prob.unsqueeze(1).expand_as(pred_power)
+                if self.hparams.model in set(["cnn1dnilm", "ai851dnilm", None]):
+                        with torch.no_grad():
+                                logits, pred_power  = self.model(x)
+                        
+                        prob, pred_state = torch.max(F.softmax(logits, 1), 1)
+                        if len(self.hparams.quantiles)>1:
+                                prob=prob.unsqueeze(1).expand_as(pred_power)
 
-                # else: 
-                logs = {"pred_power":pred_power, "pred_state":pred_state, "power":y, "state":z}
+                        # else: 
+                        logs = {"pred_power":pred_power, "pred_state":pred_state, "power":y, "state":z}
+
+                elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
+                        with torch.no_grad():
+                                logits  = self.model(x)
+                        
+                        prob, pred_state = torch.max(F.softmax(logits, 1), 1)
+
+                        logs = {"pred_power":np.nan, "pred_state":pred_state, "power":np.nan, "state":z}
+
                 return logs
 
         def validation_epoch_end(self, outputs):
                 # OPTIONAL
-                avg_loss = np.mean([x['nlloss'].item()+x['mseloss'].item() for x in outputs])
-                avg_f1 = np.mean([x['F1'].item() for x in outputs])
-                avg_rmse = np.mean([x['mae'].item() for x in outputs])
-                logs = {'val_loss': avg_loss, "val_F1": avg_f1, "val_mae":avg_rmse}
+                if self.hparams.model in set(["cnn1dnilm", "ai851dnilm", None]):
+                        avg_loss = np.mean([x['nlloss'].item()+x['mseloss'].item() for x in outputs])
+                        avg_f1 = np.mean([x['F1'].item() for x in outputs])
+                        avg_rmse = np.mean([x['mae'].item() for x in outputs])
+                        logs = {'val_loss': avg_loss, "val_F1": avg_f1, "val_mae":avg_rmse}
+                elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
+                        avg_loss = np.mean([x['nlloss'].item() for x in outputs])
+                        avg_f1 = np.mean([x['F1'].item() for x in outputs])
+                        logs = {'val_loss': avg_loss, "val_F1": avg_f1}
                 return {'log':logs}
         
 
         def test_epoch_end(self, outputs):
-
                 appliance_data = self.appliance_data
-                pred_power = torch.cat([x['pred_power'] for x in outputs], 0).cpu().numpy()
-                pred_state = torch.cat([x['pred_state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
-                power = torch.cat([x['power'] for x in outputs], 0).cpu().numpy()
-                state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
-                
-                for idx, app in enumerate(self.appliances):
-                        power[:,idx] = (power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
-                        if len(self.hparams.quantiles)>=2:
-                                pred_power[:,:, idx] = (pred_power[:,:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
-                                pred_power[:,:, idx] = np.where(pred_power[:,:, idx]<0, 0, pred_power[:,:, idx])
-                        else:
-                                pred_power[:, idx] = (pred_power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
-                                pred_power[:, idx] = np.where(pred_power[:, idx]<0, 0, pred_power[:, idx])    
 
-                if len(self.hparams.quantiles)>=2:
-                        idx = len(self.hparams.quantiles)//2
-                        y_pred = pred_power[:,idx]
-                else:
-                        y_pred = pred_power
-                
-                per_app_results, avg_results = get_results_summary(state, pred_state, 
-                                                                        power, y_pred,
-                                                                        self.appliances, 
-                                                                        self.dataset_name)  
-                logs = {"pred_power":np.round(y_pred, decimals=2),
-                        "pred_state":pred_state, 
-                        "power":np.round(power, decimals=2),
-                        "state":state,
-                        'app_results':per_app_results, 
-                        'avg_results':avg_results} 
+                if self.hparams.model in set(["cnn1dnilm", "ai851dnilm", None]):
+                        pred_power = torch.cat([x['pred_power'] for x in outputs], 0).cpu().numpy()
+                        pred_state = torch.cat([x['pred_state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+                        power = torch.cat([x['power'] for x in outputs], 0).cpu().numpy()
+                        state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+                        
+                        for idx, app in enumerate(self.appliances):
+                                power[:,idx] = (power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                                if len(self.hparams.quantiles)>=2:
+                                        pred_power[:,:, idx] = (pred_power[:,:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                                        pred_power[:,:, idx] = np.where(pred_power[:,:, idx]<0, 0, pred_power[:,:, idx])
+                                else:
+                                        pred_power[:, idx] = (pred_power[:, idx] * (appliance_data[app]["max"] - appliance_data[app]["min"])) + appliance_data[app]['min']
+                                        pred_power[:, idx] = np.where(pred_power[:, idx]<0, 0, pred_power[:, idx])    
+
+                        if len(self.hparams.quantiles)>=2:
+                                idx = len(self.hparams.quantiles)//2
+                                y_pred = pred_power[:,idx]
+                        else:
+                                y_pred = pred_power
+                        
+                        per_app_results, avg_results = get_results_summary(state, pred_state, 
+                                                                                power, y_pred,
+                                                                                self.appliances, 
+                                                                                self.dataset_name)  
+                        logs = {"pred_power":np.round(y_pred, decimals=2),
+                                "pred_state":pred_state, 
+                                "power":np.round(power, decimals=2),
+                                "state":state,
+                                'app_results':per_app_results, 
+                                'avg_results':avg_results}
+
+                elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
+                        pred_state = torch.cat([x['pred_state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+                        state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
+
+                        logs = {"pred_state":pred_state,
+                                "state":state}
                 return logs
 
         def fit(self):
@@ -339,7 +383,7 @@ class NILMnet(object):
                         schedulers[1].on_epoch_end(epoch, optims[0])
 
                 pred = self.predict(self.model, self.val_loader)
-
+                MSGLOGGER.info(str(pred))
 
         def validate(self, epoch=-1):
                 """Execute the validation/test loop."""
