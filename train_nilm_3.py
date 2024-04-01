@@ -51,7 +51,7 @@ ALL_LOGGERS = None
 
 from torchmetrics.functional import f1_score
 
-from unetnilm.metrics import get_results_summary
+from unetnilm.metrics import get_results_summary, compute_metrics
 from unetnilm.utils import QuantileLoss
 
 #####################################################################################
@@ -249,8 +249,28 @@ class NILMnet(object):
                         pred_state = torch.cat([x['pred_state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
                         state = torch.cat([x['state'] for x in outputs], 0).cpu().numpy().astype(np.int32)
 
+                        def _summary(z_t, z_p, appliances, data="UKDALE"):
+                                mlb = compute_metrics(z_t, z_p)
+                                per_app = {'exbF1': mlb['appF1'],
+                                        'HA': (1-mlb['HA']).tolist()}
+                                per_app =pd.DataFrame.from_dict(per_app, orient="index")
+                                per_app.columns = appliances
+                                avg_results = {'exbF1': mlb['ebF1'].tolist(),
+                                                'maF1': mlb['maF1'].tolist(),
+                                                'miF1': mlb['miF1'].tolist(),
+                                                'HA': (1-mlb['HA']).mean().tolist()}
+                                avg_results =pd.DataFrame.from_dict(avg_results, orient="index")
+                                avg_results.columns = [data]
+                                return per_app, avg_results
+
+                        per_app_results, avg_results = _summary(state, pred_state, 
+                                                                self.appliances, 
+                                                                self.dataset_name)  
+
                         logs = {"pred_state":pred_state,
-                                "state":state}
+                                "state":state,
+                                'app_results':per_app_results, 
+                                'avg_results':avg_results}
                 return logs
 
         def fit(self):
@@ -268,6 +288,10 @@ class NILMnet(object):
 
                 perf_scores_history = []
 
+                optimizer = optims[0]
+                ms_lr_scheduler = schedulers[0]
+                compression_scheduler = schedulers[1]
+
                 # training loop
                 for epoch in range(self.hparams.epochs):
 
@@ -276,8 +300,19 @@ class NILMnet(object):
                                 # Fuse the BN parameters into conv layers before Quantization 
                                 ai8x.fuse_bn_layers(self.model)
                         
+                                # Update the optimizer to reflect fused batchnorm layers
+                                optimizer = ai8x.update_optimizer(self.model, optimizer)
+
                                 # Switch model from unquantized to quantized for QAT
                                 ai8x.initiate_qat(self.model, self.qat_policy)
+
+                                # Update the compression scheduler to reflect the updated optimizer
+                                for ep, _ in enumerate(compression_scheduler.policies):
+                                        for pol in compression_scheduler.policies[ep]:
+                                                for attr_key in dir(pol):
+                                                        attr = getattr(pol, attr_key)
+                                                        if hasattr(attr, 'optimizer'):
+                                                                attr.optimizer = optimizer
 
                                 # self.Model is re-transferred to GPU in case parameters were added
                                 self.model.to(self.device)
@@ -314,11 +349,11 @@ class NILMnet(object):
                                 losses["objective_loss"].add(loss.item())
 
                                 # reset the optimizer
-                                optims[0].zero_grad()
+                                optimizer.zero_grad()
 
                                 # backwards pass and parameter update
                                 loss.backward()
-                                optims[0].step()
+                                optimizer.step()
                         
                                 # track batch stats
                                 batch_time.add(time.time() - end)
@@ -335,7 +370,7 @@ class NILMnet(object):
                                                 stats_dict[loss_name] = meter.mean
                                         stats_dict.update(errs)
 
-                                        stats_dict['LR'] = optims[0].param_groups[0]['lr']
+                                        stats_dict['LR'] = optimizer.param_groups[0]['lr']
                                         stats_dict['Time'] = batch_time.mean
                                         stats = ('Performance/Training/', stats_dict)
                                         params = None
@@ -374,13 +409,13 @@ class NILMnet(object):
 
                         is_best = epoch == perf_scores_history[0].epoch
 
-                        apputils.save_checkpoint(epoch, self.model_name, self.model, optimizer=optims[0],
+                        apputils.save_checkpoint(epoch, self.model_name, self.model, optimizer=optimizer,
                                                         scheduler=schedulers[1], extras={},
                                                         is_best=is_best, name=self.model_name,
                                                         dir=MSGLOGGER.logdir)
 
                         schedulers[0].step(metrics=val_logs['log']["val_loss"])
-                        schedulers[1].on_epoch_end(epoch, optims[0])
+                        schedulers[1].on_epoch_end(epoch, optimizer)
 
                 pred = self.predict(self.model, self.val_loader)
                 MSGLOGGER.info(str(pred))
