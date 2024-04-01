@@ -142,6 +142,37 @@ class AI85CNN1DNiLM(nn.Module):
 
         return states_logits, power_logits
 
+class AI85CNN1DNiLMStates(nn.Module):
+    def __init__(self, in_size=1, 
+                 output_size=5,
+                 d_model=64,
+                 dropout=0.1, 
+                 seq_len=99,
+                 n_layers=5, 
+                 n_quantiles=3, 
+                 pool_filter=16,
+                 device="cuda:0"):
+        super(AI85CNN1DNiLMStates, self).__init__()
+
+        self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len, device=device)
+        self.pool_filter = pool_filter
+        self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None)
+        self.dropout = nn.Dropout(dropout)
+        self.n_quantiles = n_quantiles
+        
+        self.fc_out_state  = ai8x.Linear(1024, output_size*2, bias=True)
+        nn.init.xavier_normal_(self.fc_out_state.op.weight)
+        
+    def forward(self, x):
+        x = x.permute(0,2,1)
+        B = x.size(0)
+        conv_out = self.dropout(self.enc_net(x))
+        conv_out = F.adaptive_avg_pool1d(conv_out, self.pool_filter).reshape(x.size(0), -1)
+        mlp_out  = self.dropout(self.mlp_layer(conv_out))
+        states_logits   = self.fc_out_state(mlp_out).reshape(B, 2, -1)
+
+        return states_logits
+
 class Encoder(nn.Module):
     def __init__(self, 
                  n_channels=10, 
