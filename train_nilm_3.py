@@ -108,6 +108,12 @@ class NILMnet(object):
 
                 ai8x.set_device(device=85, simulate=False, round_avg=False)
 
+                model_args = {
+                        "weight_bits" : None,
+                        "bias_bits" : None,
+                        "quantize_activation" : False
+                }
+
                 if self.hparams.model in set(["cnn1dnilm", "ai851dnilm", None]):
                         self.model = mod.AI85CNN1DNiLM(in_size=1, 
                                   output_size=self.num_classes, 
@@ -115,7 +121,8 @@ class NILMnet(object):
                                   d_model=hparams.d_model, 
                                   n_quantiles=len(hparams.quantiles), 
                                   dropout=hparams.dropout,
-                                  pool_filter=hparams.pool_filter)
+                                  pool_filter=hparams.pool_filter,
+                                  **model_args)
 
                 elif self.hparams.model in set(["cnn1dnilm-states", "ai851dnilm-states"]):
                         self.model = mod.AI85CNN1DNiLMStates(in_size=1, 
@@ -124,7 +131,8 @@ class NILMnet(object):
                                   d_model=hparams.d_model, 
                                   n_quantiles=len(hparams.quantiles), 
                                   dropout=hparams.dropout,
-                                  pool_filter=hparams.pool_filter)
+                                  pool_filter=hparams.pool_filter,
+                                  **model_args)
 
         def _step(self, batch):
                 x, y, z = batch

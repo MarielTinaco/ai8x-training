@@ -104,7 +104,7 @@ def ukdale_get_datasets(data, load_train=True, load_test=True, load_val=None):
     (data_dir, args) = data
 
     if load_train:
-        train_transform = transforms.Compose([])
+        train_transform = transforms.Compose([ai8x.normalize(args)])
         
         train_dataset = UkdaleDataset(root_dir=data_dir,
                                       d_type="train",
@@ -114,7 +114,7 @@ def ukdale_get_datasets(data, load_train=True, load_test=True, load_val=None):
         train_dataset = None
 
     if load_test:
-        test_transform = transforms.Compose([])
+        test_transform = transforms.Compose([ai8x.normalize(args)])
 
         test_dataset = UkdaleDataset(root_dir=data_dir,
                                      d_type="test",
@@ -123,7 +123,7 @@ def ukdale_get_datasets(data, load_train=True, load_test=True, load_val=None):
         test_dataset = None
     
     if load_val:
-        val_transform = transforms.Compose([])
+        val_transform = transforms.Compose([ai8x.normalize(args)])
 
         val_dataset = UkdaleDataset(root_dir=data_dir,
                                      d_type="val",

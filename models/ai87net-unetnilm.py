@@ -151,16 +151,17 @@ class AI85CNN1DNiLMStates(nn.Module):
                  n_layers=5, 
                  n_quantiles=3, 
                  pool_filter=16,
-                 device="cuda:0"):
+                 device="cuda:0",
+                 **kwargs):
         super(AI85CNN1DNiLMStates, self).__init__()
 
-        self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len, device=device)
+        self.enc_net = Encoder(n_channels=in_size, n_kernels=d_model, n_layers=n_layers, seq_size=seq_len, device=device, **kwargs)
         self.pool_filter = pool_filter
-        self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None)
+        self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None, **kwargs)
         self.dropout = nn.Dropout(dropout)
         self.n_quantiles = n_quantiles
         
-        self.fc_out_state  = ai8x.Linear(1024, output_size*2, bias=True)
+        self.fc_out_state  = ai8x.Linear(1024, output_size*2, bias=True, **kwargs)
         nn.init.xavier_normal_(self.fc_out_state.op.weight)
         
     def forward(self, x):
@@ -179,16 +180,17 @@ class Encoder(nn.Module):
                  n_kernels=16, 
                  n_layers=3, 
                  seq_size=50,
-                 device="cuda:0"):
+                 device="cuda:0",
+                 **kwargs):
         super(Encoder, self).__init__()
         self.feat_size = (seq_size-1) // 2**n_layers +1
         self.feat_dim = self.feat_size * n_kernels
         self.conv_stack = nn.Sequential(
-            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", pooling="Max", last=False, device=device)] +
+            *([Conv1D(n_channels, n_kernels // 2**(n_layers-1), activation="ReLU", pooling="Max", last=False, device=device, **kwargs)] +
               [Conv1D(n_kernels//2**(n_layers-l),
-                         n_kernels//2**(n_layers-l-1), activation="ReLU", pooling="Max", last=False, device=device)
+                         n_kernels//2**(n_layers-l-1), activation="ReLU", pooling="Max", last=False, device=device, **kwargs)
                for l in range(1, n_layers-1)] +
-              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", pooling="Max", last=True, device=device)])
+              [Conv1D(n_kernels // 2, n_kernels, activation="ReLU", pooling="Max", last=True, device=device, **kwargs)])
         )
     def forward(self, x):
         assert len(x.size())==3
@@ -198,7 +200,8 @@ class Encoder(nn.Module):
 class MLPLayer(nn.Module):
     def __init__(self, in_size, 
                  hidden_arch=[128/2, 512/2, 1024/2], 
-                 output_size=None):
+                 output_size=None,
+                 **kwargs):
         
         super(MLPLayer, self).__init__()
         self.in_size = in_size
@@ -207,11 +210,11 @@ class MLPLayer(nn.Module):
         self.layers = []
 
         for i in range(len(layer_sizes)-1):
-            layer = ai8x.Linear(layer_sizes[i], layer_sizes[i+1])
+            layer = ai8x.Linear(layer_sizes[i], layer_sizes[i+1], **kwargs)
             self.layers.append(layer)
 
         if output_size is not None:
-            layer = ai8x.Linear(layer_sizes[-1], output_size)
+            layer = ai8x.Linear(layer_sizes[-1], output_size, **kwargs)
             self.layers.append(layer)
 
         self.init_weights()
