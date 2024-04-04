@@ -112,6 +112,7 @@ import parsecmd
 import sample
 from losses.dummyloss import DummyLoss
 from losses.multiboxloss import MultiBoxLoss
+from losses.multitarget_nllloss import MultiTargetNllLoss
 from nas import parse_nas_yaml
 from utils import kd_relationbased, object_detection_utils, parse_obj_detection_yaml
 
@@ -130,6 +131,25 @@ weight_sum = None
 weight_stddev = None
 weight_mean = None
 
+class DummyErrorMeter:
+
+    def __init__(self, topk=[1], accuracy=False):
+        self.topk = np.sort(topk)
+        self.accuracy = accuracy
+        self.reset()
+
+    def add(self, output, target):
+        self.n = 0
+    
+    def reset(self):
+        self.sum = {v: 0 for v in self.topk}
+        self.n = 0
+    
+    def value(self, k=-1):
+        if k != -1:
+            return 0
+        else:
+            return [self.value(k_) for k_ in self.topk]
 
 def main():
     """main"""
@@ -393,6 +413,9 @@ def main():
                                  alpha=obj_detection_params['multi_box_loss']['alpha'],
                                  neg_pos_ratio=obj_detection_params['multi_box_loss']
                                  ['neg_pos_ratio'], device=args.device).to(args.device)
+
+    if args.multitarget:
+        criterion = MultiTargetNllLoss(device=args.device).to(args.device)
 
     elif args.dr:
 
@@ -782,7 +805,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
                           (OBJECTIVE_LOSS_KEY, tnt.AverageValueMeter())])
 
     if not args.regression:
-        classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        if args.multitarget:
+            classerr = DummyErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        else:
+            classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
         classerr = tnt.MSEMeter()
     batch_time = tnt.AverageValueMeter()
@@ -879,6 +905,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
                     (args.show_train_accuracy == 'last_batch'
                         and train_step >= len(train_loader)-2):
                     if len(output.data.shape) <= 2 or args.regression:
+                        classerr.add(output.data, target)
+                    elif args.multitarget:
                         classerr.add(output.data, target)
                     else:
                         classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0,
@@ -1100,7 +1128,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
         ).to(args.device)
         mAP = 0.00
     if not args.regression:
-        classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        if args.multitarget:
+            classerr = DummyErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        else:
+            classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
         classerr = tnt.MSEMeter()
 
@@ -1282,6 +1313,8 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
                 if not args.obj_detection and not args.kd_relationbased:
                     if len(output.data.shape) <= 2 or args.regression:
+                        classerr.add(output.data, target)
+                    elif args.multitarget:
                         classerr.add(output.data, target)
                     else:
                         classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0,
