@@ -1503,6 +1503,13 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, mAP, 
             msglogger.info('==> Best [Overall Loss: %f on epoch: %d]',
                            -score.vloss, score.epoch)
 
+    elif args.multitarget:
+        perf_scores_history.sort(key=operator.attrgetter('vloss', 'epoch'),
+                                     reverse=True)
+        for score in perf_scores_history[:args.num_best_scores]:
+            msglogger.info('==> Best [Overall Loss: %f on epoch: %d]',
+                           -score.vloss, score.epoch)
+
     elif args.obj_detection:
 
         # Keep perf_scores_history sorted from best to worst

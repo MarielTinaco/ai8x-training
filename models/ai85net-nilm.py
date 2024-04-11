@@ -31,25 +31,67 @@ class AI85NILMNet(nn.Module):
     ):
         super().__init__()
 
-        d_model = 128
+        d_model = 18
         n_layers = 3
-        pool_filter = 8   
+        pool_filter = 4
         dropout = 0.1
+        hidden_layer = 256
 
         self.pool_filter = pool_filter
 
-        self.enc_net = Encoder(n_channels=num_channels, n_kernels=d_model, n_layers=n_layers, seq_size=dimensions[0], **kwargs)
-        self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None, **kwargs)
+        # self.enc_net = Encoder(n_channels=num_channels, n_kernels=d_model, n_layers=n_layers, seq_size=dimensions[0], **kwargs)
+        # self.mlp_layer = MLPLayer(in_size=d_model*pool_filter, hidden_arch=[1024], output_size=None, **kwargs)
+        # self.dropout = nn.Dropout(dropout)
+        # self.fc_out_state  = ai8x.Linear(1024, num_classes*2, bias=bias, **kwargs)
+
         self.dropout = nn.Dropout(dropout)
-        self.fc_out_state  = ai8x.Linear(1024, num_classes*2, bias=bias, **kwargs)
+
+        self.enc1 = ai8x.FusedMaxPoolConv1dBNReLU(num_channels,
+                                                  d_model // 2**(n_layers-1),
+                                                  3, stride=1, padding=1, bias=bias, 
+                                                  batchnorm='NoAffine', **kwargs)
+
+        self.enc2 = ai8x.FusedMaxPoolConv1dBNReLU(d_model // 2**(n_layers-1),
+                                                  d_model // 2**(n_layers-2),
+                                                  3, stride=1, padding=1, bias=bias, 
+                                                  batchnorm='NoAffine', **kwargs)
+
+        self.enc3 = ai8x.FusedConv1dBNReLU(d_model // 2**(n_layers-2),
+                                           d_model,
+                                           3, stride=1, padding=1, bias=bias, 
+                                           batchnorm='NoAffine', **kwargs)
+
+        self.avg = ai8x.FusedAvgPoolConv1dReLU(d_model,
+                                               d_model * pool_filter,
+                                               1, stride=1, padding=1, bias=bias, **kwargs)
+
+        self.mlp1 = ai8x.Linear(d_model * pool_filter * 14,
+                                hidden_layer,
+                                bias=bias, **kwargs)
+
+        self.fc_out_state  = ai8x.Linear(hidden_layer, num_classes*2, bias=bias, wide=True, **kwargs)
+
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
         B = x.size(0)
-        conv_out = self.dropout(self.enc_net(x))
-        conv_out = F.adaptive_avg_pool1d(conv_out, self.pool_filter).reshape(B, -1)
-        mlp_out  = self.dropout(self.mlp_layer(conv_out))
-        states_logits   = self.fc_out_state(mlp_out).reshape(B, 2, -1)
+        # conv_out = self.dropout(self.enc_net(x))
+        # conv_out = F.adaptive_avg_pool1d(conv_out, self.pool_filter).reshape(B, -1)
+        # mlp_out  = self.dropout(self.mlp_layer(conv_out))
+        # states_logits   = self.fc_out_state(mlp_out).reshape(B, 2, -1)
+
+        conv_out = self.enc1(x)
+        conv_out = self.enc2(conv_out)
+        conv_out = self.enc3(conv_out)
+        drop = self.dropout(conv_out)
+
+        drop = self.avg(conv_out)
+        drop = drop.view(drop.size(0), -1)
+
+        mlp_out = self.mlp1(drop)
+        drop = self.dropout(mlp_out)
+
+        states_logits   = self.fc_out_state(drop).reshape(B, 2, -1)
 
         return states_logits
 
