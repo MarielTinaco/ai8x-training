@@ -83,6 +83,7 @@ import torch.optim
 import torch.utils.data
 from torch import nn
 from torch.backends import cudnn
+import torch.nn.functional as F
 
 # pylint: disable=wrong-import-order
 import distiller
@@ -414,8 +415,13 @@ def main():
                                  neg_pos_ratio=obj_detection_params['multi_box_loss']
                                  ['neg_pos_ratio'], device=args.device).to(args.device)
 
-    if args.multitarget:
-        criterion = MultiTargetNllLoss(device=args.device).to(args.device)
+    elif args.multitarget:
+        if 'weight' in selected_source:
+            criterion = nn.NLLLoss(
+                torch.tensor(selected_source['weight'], dtype=torch.float)
+            ).to(args.device)
+        else:
+            criterion = nn.NLLLoss().to(args.device)
 
     elif args.dr:
 

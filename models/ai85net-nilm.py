@@ -71,6 +71,8 @@ class AI85NILMNet(nn.Module):
 
         self.fc_out_state  = ai8x.Linear(hidden_layer, num_classes*2, bias=bias, wide=True, **kwargs)
 
+        self.m = nn.LogSoftmax(dim=1)
+        
 
     def forward(self, x):
         x = x.permute(0, 2, 1)
@@ -93,7 +95,7 @@ class AI85NILMNet(nn.Module):
 
         states_logits   = self.fc_out_state(drop).reshape(B, 2, -1)
 
-        return states_logits
+        return self.m(states_logits)
 
 class Encoder(nn.Module):
     def __init__(self, 

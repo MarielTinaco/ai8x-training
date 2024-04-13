@@ -105,7 +105,7 @@ datasets = [
 		'name' : 'UKDALE_small',
 		'input' : (1, 100),
 		'output' : (0, 1, 2, 3, 4),
-		'weight' : (1, 1, 1, 1, 1),
+		'weights' : (1, 1),
 		'loader' : ukdale_small_get_datasets,
 	}
 ]
