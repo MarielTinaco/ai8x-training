@@ -314,6 +314,9 @@ def main():
 
     model = create_model(supported_models, dimensions, args)
 
+    if args.multitarget:
+        model = nn.Sequential(model, nn.LogSoftmax(dim=1))
+    
     # if args.add_logsoftmax:
     #     model = nn.Sequential(model, nn.LogSoftmax(dim=1))
     # if args.add_softmax:
@@ -329,13 +332,10 @@ def main():
 
         tflogger.tblogger.writer.add_text('Command line', str(args))
 
-        if args.multitarget:
-            dummy_input = torch.randn((args.batch_size, dimensions[1], dimensions[0]))
-        else:
-            if dimensions[2] > 1:
-                dummy_input = torch.randn((1, ) + dimensions)
-            else:  # 1D input
-                dummy_input = torch.randn((1, ) + dimensions[:-1])
+        if dimensions[2] > 1:
+            dummy_input = torch.randn((1, ) + dimensions)
+        else:  # 1D input
+            dummy_input = torch.randn((1, ) + dimensions[:-1])
         tflogger.tblogger.writer.add_graph(model.to('cpu'), (dummy_input, ), False)
 
         all_loggers.append(tflogger)

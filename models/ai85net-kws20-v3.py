@@ -22,9 +22,9 @@ class AI85KWS20Netv3(nn.Module):
     # num_classes = n keywords + 1 unknown
     def __init__(
             self,
-            num_classes=21,
-            num_channels=128,
-            dimensions=(128, 1),  # pylint: disable=unused-argument
+            num_classes=5,
+            num_channels=1,
+            dimensions=(100, 1),  # pylint: disable=unused-argument
             bias=False,
             **kwargs
 
@@ -56,11 +56,13 @@ class AI85KWS20Netv3(nn.Module):
         self.kws_conv4 = ai8x.FusedMaxPoolConv1dReLU(100, 64, 6, stride=1, padding=1,
                                                      bias=bias, **kwargs)
         # T : 4 F: 64
-        self.fc = ai8x.Linear(256, num_classes, bias=bias, wide=True, **kwargs)
+        self.fc = ai8x.Linear(128, num_classes*2, bias=bias, wide=True, **kwargs)
 
     def forward(self, x):  # pylint: disable=arguments-differ
         """Forward prop"""
         # Run CNN
+        x = x.permute(0, 2, 1)
+        B = x.size(0)
         x = self.voice_conv1(x)
         x = self.voice_conv2(x)
         x = self.drop(x)
@@ -75,7 +77,7 @@ class AI85KWS20Netv3(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
-        return x
+        return x.reshape(B, 2, -1)
 
 
 def ai85kws20netv3(pretrained=False, **kwargs):

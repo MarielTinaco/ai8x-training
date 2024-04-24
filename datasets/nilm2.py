@@ -43,8 +43,8 @@ class NILM(torch.utils.data.Dataset):
 
 	def __load(self,
 	    	   experiment,
-			   denoise,
-			   data_type="training"):
+		   denoise,
+		   data_type="training"):
 
 		dirs = Path.iterdir(self.root / type(self).__name__ )
 		dirs = filter(lambda x : x.name.split("_")[:2] == [experiment, self.t_type], dirs)
@@ -71,7 +71,7 @@ class NILM(torch.utils.data.Dataset):
 
 	def __getitem__(self, index):
 		inputs, state = self.get_sample(index)
-		return torch.tensor(inputs).unsqueeze(-1).float(), torch.tensor(state).long().squeeze()
+		return torch.tensor(inputs).unsqueeze(-1).permute(1, 0).float(), torch.tensor(state).long().squeeze()
 
 
 def ukdale_small_get_datasets(data, load_train=True, load_test=True):
@@ -82,7 +82,7 @@ def ukdale_small_get_datasets(data, load_train=True, load_test=True):
 
 	transform = transforms.Compose([
 					ai8x.normalize(args=args)
-    ])
+    			])
 
 	if load_train:
 		train_dataset = NILM(root=data_dir, classes=classes, d_type='train', t_type='ukdale',

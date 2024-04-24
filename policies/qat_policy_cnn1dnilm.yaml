@@ -1,3 +1,9 @@
 ---
-start_epoch: 80
+start_epoch: 95
 weight_bits: 8
+shift_quantile: 1.0
+overrides:
+  avg:
+    weight_bits: 4
+  mlp1:
+    weight_bits: 4
