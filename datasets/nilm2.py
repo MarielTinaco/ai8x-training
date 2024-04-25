@@ -73,6 +73,31 @@ class NILM(torch.utils.data.Dataset):
 		inputs, state = self.get_sample(index)
 		return torch.tensor(inputs).unsqueeze(-1).permute(1, 0).float(), torch.tensor(state).long().squeeze()
 
+class NILMAutoEncoder(NILM):
+
+	def __load(self,
+	    	   experiment,
+		   denoise,
+		   data_type="training"):
+
+		dirs = Path.iterdir(self.root / "NILM" )
+		dirs = filter(lambda x : x.name.split("_")[:2] == [experiment, self.t_type], dirs)
+		latest_dir = max(dirs, key= lambda dir : dir.stat().st_mtime_ns)
+
+		if denoise:
+			x = np.load(latest_dir / data_type / "denoise_inputs.npy")
+		else:
+			x = np.load(latest_dir / data_type / "noise_inputs.npy")
+		y = np.load(latest_dir / data_type / "targets.npy")
+		z = np.load(latest_dir / data_type / "states.npy")
+
+		return x, z
+
+
+	def __getitem__(self, index):
+		inputs, state = self.get_sample(index)
+		return torch.tensor(inputs).unsqueeze(-1).float(), torch.tensor(state).long().squeeze()
+
 class NILMRegress(torch.utils.data.Dataset):
     
 	class_dict = {"fridge" : 0, "washer dryer" : 1, "kettle" : 2, "dish washer" : 3, "microwave" : 4}
@@ -112,7 +137,6 @@ class NILMRegress(torch.utils.data.Dataset):
 
 		return x, (z, y)
 
-
 	def __len__(self):
 		return self.data.shape[0] - self.seq_len
 
@@ -131,6 +155,65 @@ class NILMRegress(torch.utils.data.Dataset):
 		state = targets[0]
 		power = targets[1]
 		return torch.tensor(inputs).unsqueeze(-1).permute(1, 0).float(), \
+			(torch.tensor(state).long().squeeze(), torch.tensor(power).float().squeeze())
+
+class NILMAutoEncoderRegress(torch.utils.data.Dataset):
+    
+	class_dict = {"fridge" : 0, "washer dryer" : 1, "kettle" : 2, "dish washer" : 3, "microwave" : 4}
+
+	def __init__(self, root, classes, d_type, t_type="ukdale", transform=None, 
+	      		 quantization_scheme=None, augmentation=None, download=False, 
+				 save_unquantized=False, **kwargs):
+	
+		self.root = Path(root)
+		self.classes = classes
+		self.d_type = d_type
+		self.t_type = t_type
+		self.transform = transform
+		self.save_unquantized = save_unquantized
+
+		experiment = kwargs.get('experiment', DEFAULT_EXPERIMENT)
+		denoise = kwargs.get('denoise', False)
+		self.seq_len = kwargs.get('seq_len')
+		self.data, self.targets = self.__load(experiment=experiment, denoise=denoise)
+		self.indices = np.arange(self.data.shape[0])
+
+	def __load(self,
+	    	   experiment,
+		   denoise,
+		   data_type="training"):
+
+		dirs = Path.iterdir(self.root / "NILM" )
+		dirs = filter(lambda x : x.name.split("_")[:2] == [experiment, self.t_type], dirs)
+		latest_dir = max(dirs, key= lambda dir : dir.stat().st_mtime_ns)
+
+		if denoise:
+			x = np.load(latest_dir / data_type / "denoise_inputs.npy")
+		else:
+			x = np.load(latest_dir / data_type / "noise_inputs.npy")
+		y = np.load(latest_dir / data_type / "targets.npy")
+		z = np.load(latest_dir / data_type / "states.npy")
+
+		return x, (z, y)
+
+	def __len__(self):
+		return self.data.shape[0] - self.seq_len
+
+	def get_sample(self, index):
+		indices = self.indices[index : index + self.seq_len]
+		inds_inputs=sorted(indices[:self.seq_len])
+		inds_targs=sorted(indices[self.seq_len-1:self.seq_len])
+		
+		states = self.targets[0]
+		power = self.targets[1]
+
+		return self.data[inds_inputs], (states[inds_targs], power[inds_targs])
+
+	def __getitem__(self, index):
+		inputs, targets = self.get_sample(index)
+		state = targets[0]
+		power = targets[1]
+		return torch.tensor(inputs).unsqueeze(-1).float(), \
 			(torch.tensor(state).long().squeeze(), torch.tensor(power).float().squeeze())
 
 
@@ -184,9 +267,60 @@ def ukdale_small_regress_get_datasets(data, load_train=True, load_test=True):
 									seq_len = 100)
 	else:
 		test_dataset = None
+
+	return train_dataset, test_dataset
+
+def ukdale_small_autoencoder_get_datasets(data, load_train=True, load_test=True):
+
+	(data_dir, args) = data
+
+	classes = ['fridge', 'washer dryer', 'kettle', 'dish washer', 'microwave']
+
+	transform = transforms.Compose([
+					ai8x.normalize(args=args)
+    			])
+
+	if load_train:
+		train_dataset = NILMAutoEncoder(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100)
+	else:
+		train_dataset = None
+
+	if load_test:
+		test_dataset = NILMAutoEncoder(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100)
+	else:
+		test_dataset = None
 	
 	return train_dataset, test_dataset
 
+def ukdale_small_autoencoder_regress_get_datasets(data, load_train=True, load_test=True):
+
+	(data_dir, args) = data
+
+	classes = ['fridge', 'washer dryer', 'kettle', 'dish washer', 'microwave']
+
+	transform = transforms.Compose([
+					ai8x.normalize(args=args)
+    			])
+
+	if load_train:
+		train_dataset = NILMAutoEncoderRegress(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100)
+	else:
+		train_dataset = None
+
+	if load_test:
+		test_dataset = NILMAutoEncoderRegress(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100)
+	else:
+		test_dataset = None
+	
+	return train_dataset, test_dataset
 
 datasets = [
 	{
@@ -202,5 +336,19 @@ datasets = [
 		'output' : (0, 1, 2, 3, 4),
 		'weights' : (1, 1),
 		'loader' : ukdale_small_regress_get_datasets,
+	},
+	{
+		'name' : 'UKDALE_small_autoencoder',
+		'input' : (100, 1),
+		'output' : (0, 1, 2, 3, 4),
+		'weights' : (1, 1),
+		'loader' : ukdale_small_autoencoder_get_datasets,
+	},
+	{
+		'name' : 'UKDALE_small_autoencoder_regress',
+		'input' : (100, 1),
+		'output' : (0, 1, 2, 3, 4),
+		'weights' : (1, 1),
+		'loader' : ukdale_small_autoencoder_regress_get_datasets,
 	}
 ]
