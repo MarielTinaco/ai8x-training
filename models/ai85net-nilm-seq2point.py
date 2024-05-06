@@ -53,7 +53,7 @@ class AI85NILMSeq2Point(nn.Module):
 		
 		self.mlp = ai8x.FusedLinearReLU(500, 256, bias=bias, **kwargs)
 
-		self.fc = ai8x.Linear(256, num_classes*2, bias=bias, wide=True, **kwargs)
+		self.fc = ai8x.Linear(256, num_classes, bias=bias, wide=True, **kwargs)
 
 
 	def forward(self, x):
@@ -69,7 +69,7 @@ class AI85NILMSeq2Point(nn.Module):
 		x = x.view(x.size(0), -1)
 		x = self.mlp(x)
 		x = self.fc(x)
-		return x.reshape(B, 2, -1)
+		return x
 
 def ai85nilmseq2point(pretrained=False, **kwargs):
     """

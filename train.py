@@ -314,8 +314,8 @@ def main():
 
     model = create_model(supported_models, dimensions, args)
 
-    if args.multitarget:
-        model = nn.Sequential(model, nn.LogSoftmax(dim=1))
+    # if args.multitarget:
+    #     model = nn.Sequential(model, nn.LogSoftmax(dim=1))
     
     # if args.add_logsoftmax:
     #     model = nn.Sequential(model, nn.LogSoftmax(dim=1))
@@ -420,11 +420,11 @@ def main():
 
     elif args.multitarget:
         if 'weight' in selected_source:
-            criterion = nn.NLLLoss(
+            criterion = nn.BCEWithLogitsLoss(
                 torch.tensor(selected_source['weight'], dtype=torch.float)
             ).to(args.device)
         else:
-            criterion = nn.NLLLoss().to(args.device)
+            criterion = nn.BCEWithLogitsLoss().to(args.device)
 
     elif args.dr:
 
@@ -903,7 +903,11 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if args.out_fold_ratio != 1:
             output = ai8x.unfold_batch(output, args.out_fold_ratio)
 
-        loss = criterion(output, target)
+        if args.multitarget:
+            loss = criterion(output.float(), target.float())
+        else:
+            loss = criterion(output, target)
+
         # TODO Early exit mechanism for Object Detection case is NOT implemented yet
         if not args.obj_detection and not args.dr and not args.kd_relationbased:
             if not args.earlyexit_lossweights:
@@ -1312,7 +1316,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
             if not args.earlyexit_thresholds:
                 # compute loss
-                loss = criterion(output, target)
+                if args.multitarget:
+                    loss = criterion(output.float(), target.float())
+                else:
+                    loss = criterion(output, target)
                 if args.kd_relationbased:
                     agg_loss = args.kd_policy.before_backward_pass(None, None, None, None,
                                                                    loss, None)
