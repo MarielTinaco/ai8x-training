@@ -113,7 +113,7 @@ import parsecmd
 import sample
 from losses.dummyloss import DummyLoss
 from losses.multiboxloss import MultiBoxLoss
-from losses.multitarget_nllloss import MultiTargetNllLoss
+from losses.nilmmultitargetloss import NILMMultiTargetLoss
 from nas import parse_nas_yaml
 from utils import kd_relationbased, object_detection_utils, parse_obj_detection_yaml
 
@@ -314,9 +314,6 @@ def main():
 
     model = create_model(supported_models, dimensions, args)
 
-    if args.multitarget:
-        model = nn.Sequential(model, nn.LogSoftmax(dim=1))
-    
     # if args.add_logsoftmax:
     #     model = nn.Sequential(model, nn.LogSoftmax(dim=1))
     # if args.add_softmax:
@@ -420,11 +417,13 @@ def main():
 
     elif args.multitarget:
         if 'weight' in selected_source:
-            criterion = nn.NLLLoss(
+            nll_criterion = nn.NLLLoss(
                 torch.tensor(selected_source['weight'], dtype=torch.float)
             ).to(args.device)
         else:
-            criterion = nn.NLLLoss().to(args.device)
+            nll_criterion = nn.NLLLoss().to(args.device)
+
+        criterion = NILMMultiTargetLoss(nll_criterion)
 
     elif args.dr:
 
@@ -876,6 +875,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
             labels_list = [labels.to(args.device) for labels in labels_list]
 
             target = (boxes_list, labels_list)
+        elif args.multitarget:
+            inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target]
         else:
             inputs, target = inputs.to(args.device), target.to(args.device)
 
@@ -913,9 +914,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
                 if args.show_train_accuracy == 'full' or \
                     (args.show_train_accuracy == 'last_batch'
                         and train_step >= len(train_loader)-2):
-                    if len(output.data.shape) <= 2 or args.regression:
-                        classerr.add(output.data, target)
-                    elif args.multitarget:
+                    if args.multitarget:
+                        classerr.add(output, target)
+                    elif len(output.data.shape) <= 2 or args.regression:
                         classerr.add(output.data, target)
                     else:
                         classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0,
@@ -1281,7 +1282,10 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         map_calculator.update(preds=preds, target=gt)
                         have_mAP = True
             else:
-                inputs, target = inputs.to(args.device), target.to(args.device)
+                if args.multitarget:
+                    inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target]
+                else:
+                    inputs, target = inputs.to(args.device), target.to(args.device)
                 # compute output from model
                 if args.kd_relationbased:
                     output = args.kd_policy.forward(inputs)
@@ -1321,9 +1325,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                 losses[OBJECTIVE_LOSS_KEY].add(loss.item())
 
                 if not args.obj_detection and not args.kd_relationbased:
-                    if len(output.data.shape) <= 2 or args.regression:
-                        classerr.add(output.data, target)
-                    elif args.multitarget:
+                    if args.multitarget:
+                        classerr.add(output, target)
+                    elif len(output.data.shape) <= 2 or args.regression:
                         classerr.add(output.data, target)
                     else:
                         classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0,
