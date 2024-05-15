@@ -94,8 +94,31 @@ class AI85NILMAutoEncoderRegress(nn.Module):
 
         n_in = n_out
         n_out = num_channels* 1
-        self.out_lin_state = ai8x.Linear(n_in, num_classes * 2, bias=0, **kwargs)
-        self.out_lin_power = ai8x.Linear(n_in, num_classes * 5, bias=0, **kwargs)
+        self.de_lin3 = ai8x.FusedLinearReLU(n_in, n_out, bias=bias, **kwargs)
+
+        n_in = n_out
+
+        # --- SEQ2POINT --- #
+        self.conv1 = ai8x.FusedConv1dBNReLU(self.n_axes, 30, 9, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv2 = ai8x.FusedConv1dBNReLU(30, 30, 8, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(30, 40, 6, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+		
+        self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(40, 50, 5, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+		
+        self.conv5 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv6 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
+											bias=bias, batchnorm='Affine', **kwargs)
+		
+        self.out_lin_state = ai8x.Linear(300, num_classes * 2, bias=0, **kwargs)
+        self.out_lin_power = ai8x.Linear(300, num_classes * 5, bias=0, **kwargs)
         # ----- END OF ENCODER ----- #
 
         self.initWeights(weight_init)
@@ -115,9 +138,23 @@ class AI85NILMAutoEncoderRegress(nn.Module):
 
         x = self.de_lin1(x)
         x = self.de_lin2(x)
+        x = self.de_lin3(x)
+
+        x = x.view(x.shape[0], self.n_axes, x.shape[1])
+
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.conv3(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
+        x = self.conv6(x)
+
+        x = x.view(x.shape[0], -1)
+
         x1 = self.out_lin_state(x).reshape(B, 2, -1)
         x2 = self.out_lin_power(x).reshape(B, 5, -1)
         # x = x.view(x.shape[0], self.num_channels, self.n_axes)
+
         return (x1, x2)
 
 
