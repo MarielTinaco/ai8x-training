@@ -1281,11 +1281,28 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         # Update mAP calculator
                         map_calculator.update(preds=preds, target=gt)
                         have_mAP = True
-            else:
-                if args.multitarget:
-                    inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target]
+
+            elif args.multitarget:
+                inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target]
+                # compute output from model
+                if args.kd_relationbased:
+                    output_state, output_power = args.kd_policy.forward(inputs)
                 else:
-                    inputs, target = inputs.to(args.device), target.to(args.device)
+                    output_state, output_power = model(inputs)
+                # correct output for accurate loss calculation
+                if args.act_mode_8bit:
+                    output_state /= 128.
+                    output_power /= 128.
+                    for key in model.__dict__['_modules'].keys():
+                        if (hasattr(model.__dict__['_modules'][key], 'wide')
+                                and model.__dict__['_modules'][key].wide):
+                            output_state /= 256.
+                            output_power /= 256.
+
+                output = (output_state, output_power)
+
+            else:
+                inputs, target = inputs.to(args.device), target.to(args.device)
                 # compute output from model
                 if args.kd_relationbased:
                     output = args.kd_policy.forward(inputs)
