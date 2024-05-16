@@ -57,6 +57,23 @@ class NILM(torch.utils.data.Dataset):
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
 
+		train_x, val_x, test_x = split_data(x)
+		train_y, val_y, test_y = split_data(y)
+		train_z, val_z, test_z = split_data(z)
+
+		if self.d_type == "train":
+			x = train_x
+			y = train_y
+			z = train_z
+		elif self.d_type == "test":
+			x = test_x
+			y = test_y
+			z = test_z
+		else:
+			x = val_x
+			y = val_y
+			z = val_z
+
 		return x, z
 
 	def __len__(self):
@@ -90,6 +107,23 @@ class NILMAutoEncoder(NILM):
 			x = np.load(latest_dir / data_type / "noise_inputs.npy")
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
+
+		train_x, val_x, test_x = split_data(x)
+		train_y, val_y, test_y = split_data(y)
+		train_z, val_z, test_z = split_data(z)
+
+		if self.d_type == "train":
+			x = train_x
+			y = train_y
+			z = train_z
+		elif self.d_type == "test":
+			x = test_x
+			y = test_y
+			z = test_z
+		else:
+			x = val_x
+			y = val_y
+			z = val_z
 
 		return x, z
 
@@ -134,6 +168,23 @@ class NILMRegress(torch.utils.data.Dataset):
 			x = np.load(latest_dir / data_type / "noise_inputs.npy")
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
+
+		train_x, val_x, test_x = split_data(x)
+		train_y, val_y, test_y = split_data(y)
+		train_z, val_z, test_z = split_data(z)
+
+		if self.d_type == "train":
+			x = train_x
+			y = train_y
+			z = train_z
+		elif self.d_type == "test":
+			x = test_x
+			y = test_y
+			z = test_z
+		else:
+			x = val_x
+			y = val_y
+			z = val_z
 
 		return x, (z, y)
 
@@ -193,6 +244,23 @@ class NILMAutoEncoderRegress(torch.utils.data.Dataset):
 			x = np.load(latest_dir / data_type / "noise_inputs.npy")
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
+
+		train_x, val_x, test_x = split_data(x)
+		train_y, val_y, test_y = split_data(y)
+		train_z, val_z, test_z = split_data(z)
+
+		if self.d_type == "train":
+			x = train_x
+			y = train_y
+			z = train_z
+		elif self.d_type == "test":
+			x = test_x
+			y = test_y
+			z = test_z
+		else:
+			x = val_x
+			y = val_y
+			z = val_z
 
 		return x, (z, y)
 
