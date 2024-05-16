@@ -50,11 +50,11 @@ class AI85NILMSeq2PointRegress(nn.Module):
 		self.conv5 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
 						bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(50, 64, 4, stride=1, padding=0,
+		self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(50, 64, 4, stride=1, padding=1,
 						bias=bias, batchnorm='Affine', **kwargs)
 
-		self.fc_state = ai8x.Linear(128, num_classes*2, bias=bias, wide=True, **kwargs)
-		self.fc_power = ai8x.Linear(128, num_classes*5, bias=bias, wide=True, **kwargs)
+		self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
+		self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, **kwargs)
 
 		self.initWeights("kaiming")
 
