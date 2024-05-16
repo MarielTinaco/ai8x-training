@@ -31,30 +31,32 @@ class AI85NILMSeq2PointRegress(nn.Module):
 	):
 		super().__init__()
 
-		dropout = 0.1
-		hidden_layer = 256
+		dropout = 0.25
 
 		self.dropout = nn.Dropout(dropout)
 
 		self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 30, 9, stride=1, padding=0,
-											bias=bias, batchnorm='Affine', **kwargs)
-		
-		self.conv2 = ai8x.FusedConv1dBNReLU(30, 30, 8, stride=1, padding=0,
-											bias=bias, batchnorm='Affine', **kwargs)
-		
-		self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(30, 40, 6, stride=1, padding=0,
-											bias=bias, batchnorm='Affine', **kwargs)
-		
-		self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(40, 50, 5, stride=1, padding=0,
-											bias=bias, batchnorm='Affine', **kwargs)
-		
-		self.conv5 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
-											bias=bias, batchnorm='Affine', **kwargs)
-		
-		self.mlp = ai8x.FusedLinearReLU(500, 256, bias=bias, **kwargs)
+						bias=bias, batchnorm='Affine', **kwargs)
 
-		self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, wide=True, **kwargs)
-		self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, wide=True, **kwargs)
+		self.conv2 = ai8x.FusedConv1dBNReLU(30, 30, 8, stride=1, padding=0,
+						bias=bias, batchnorm='Affine', **kwargs)
+
+		self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(30, 40, 6, stride=1, padding=0,
+						bias=bias, batchnorm='Affine', **kwargs)
+
+		self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(40, 50, 5, stride=1, padding=0,
+						bias=bias, batchnorm='Affine', **kwargs)
+
+		self.conv5 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
+						bias=bias, batchnorm='Affine', **kwargs)
+
+		self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(50, 64, 4, stride=1, padding=0,
+						bias=bias, batchnorm='Affine', **kwargs)
+
+		self.fc_state = ai8x.Linear(128, num_classes*2, bias=bias, wide=True, **kwargs)
+		self.fc_power = ai8x.Linear(128, num_classes*5, bias=bias, wide=True, **kwargs)
+
+		self.initWeights("kaiming")
 
 	def forward(self, x):
 		B = x.size(0)
@@ -64,13 +66,41 @@ class AI85NILMSeq2PointRegress(nn.Module):
 		x = self.conv3(x)
 		x = self.conv4(x)
 		x = self.conv5(x)
-		
+		x = self.conv6(x)
 		x = self.dropout(x)
 		x = x.view(x.size(0), -1)
-		x = self.mlp(x)
 		x1 = self.fc_state(x).reshape(B, 2, -1)
 		x2 = self.fc_power(x).reshape(B, 5, -1)
 		return (x1, x2)
+
+	def initWeights(self, weight_init="kaiming"):
+		"""
+		Auto Encoder Weight Initialization
+		"""
+		weight_init = weight_init.lower()
+		assert weight_init in ('kaiming', 'xavier', 'glorot')
+
+		for m in self.modules():
+			if isinstance(m, nn.Conv2d):
+				if weight_init == "kaiming":
+					nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+				elif weight_init in ('glorot', 'xavier'):
+					nn.init.xavier_uniform_(m.weight)
+
+			elif isinstance(m, nn.ConvTranspose2d):
+				if weight_init == "kaiming":
+					nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+				elif weight_init in ('glorot', 'xavier'):
+					nn.init.xavier_uniform_(m.weight)
+
+			elif isinstance(m, nn.Linear):
+				if weight_init == "kaiming":
+					nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+				elif weight_init in ('glorot', 'xavier'):
+					nn.init.xavier_uniform_(m.weight)
 
 def ai85nilmseq2pointregress(pretrained=False, **kwargs):
     """
