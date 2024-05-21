@@ -1288,18 +1288,14 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                 if args.kd_relationbased:
                     output_state, output_power = args.kd_policy.forward(inputs)
                 else:
-                    output_state, output_power = model(inputs)
+                    output = model(inputs)
                 # correct output for accurate loss calculation
                 if args.act_mode_8bit:
-                    output_state /= 128.
-                    output_power /= 128.
+                    output /= 128.
                     for key in model.__dict__['_modules'].keys():
                         if (hasattr(model.__dict__['_modules'][key], 'wide')
                                 and model.__dict__['_modules'][key].wide):
-                            output_state /= 256.
-                            output_power /= 256.
-
-                output = (output_state, output_power)
+                            output /= 256.
 
             else:
                 inputs, target = inputs.to(args.device), target.to(args.device)

@@ -25,9 +25,10 @@ class NILMMultiTargetLoss(torch.nn.Module):
                 self.rmse_loss = QuantileLoss()
 
         def forward(self, inputs, targets):
+                B = inputs.size(0)
 
-                input_state = inputs[0]
-                input_power = inputs[1]
+                input_state = inputs[:,:2*5].reshape(B, 2, -1)
+                input_power = inputs[:,2*5:].reshape(B, 5, -1)
 
                 target_state = targets[0]
                 target_power = targets[1]

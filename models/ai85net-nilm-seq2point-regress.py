@@ -59,8 +59,6 @@ class AI85NILMSeq2PointRegress(nn.Module):
 		self.initWeights("kaiming")
 
 	def forward(self, x):
-		B = x.size(0)
-
 		x = self.conv1(x)
 		x = self.conv2(x)
 		x = self.conv3(x)
@@ -69,9 +67,11 @@ class AI85NILMSeq2PointRegress(nn.Module):
 		x = self.conv6(x)
 		x = self.dropout(x)
 		x = x.view(x.size(0), -1)
-		x1 = self.fc_state(x).reshape(B, 2, -1)
-		x2 = self.fc_power(x).reshape(B, 5, -1)
-		return (x1, x2)
+		x1 = self.fc_state(x)
+		x1 = x1.view(x1.size(0), -1)
+		x2 = self.fc_power(x)
+		x2 = x2.view(x2.size(0), -1)
+		return torch.cat([x1, x2], dim=1)
 
 	def initWeights(self, weight_init="kaiming"):
 		"""
