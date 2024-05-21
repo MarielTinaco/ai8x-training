@@ -35,26 +35,28 @@ class AI85NILMSeq2PointRegress(nn.Module):
 
 		self.dropout = nn.Dropout(dropout)
 
-		self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 30, 9, stride=1, padding=0,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 9, stride=1, padding=0,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv2 = ai8x.FusedConv1dBNReLU(30, 30, 8, stride=1, padding=0,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv2 = ai8x.FusedConv1dBNReLU(32, 32, 8, stride=1, padding=0,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(30, 40, 6, stride=1, padding=0,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(32, 48, 6, stride=1, padding=0,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(40, 50, 5, stride=1, padding=0,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(48, 64, 5, stride=1, padding=0,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv5 = ai8x.FusedConv1dBNReLU(50, 50, 5, stride=1, padding=0,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv5 = ai8x.FusedConv1dBNReLU(64, 64, 5, stride=1, padding=0,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(50, 64, 4, stride=1, padding=1,
-						bias=bias, batchnorm='Affine', **kwargs)
+		self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(64, 32, 4, stride=1, padding=1,
+				bias=bias, batchnorm='Affine', **kwargs)
 
-		self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
-		self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, **kwargs)
+		self.mlp1 = ai8x.FusedLinearReLU(128, 64, bias=bias, **kwargs)
+
+		self.fc_state = ai8x.Linear(64, num_classes*2, bias=bias, **kwargs)
+		self.fc_power = ai8x.Linear(64, num_classes*5, bias=bias, **kwargs)
 
 		self.initWeights("kaiming")
 
@@ -67,6 +69,7 @@ class AI85NILMSeq2PointRegress(nn.Module):
 		x = self.conv6(x)
 		x = self.dropout(x)
 		x = x.view(x.size(0), -1)
+		x = self.mlp1(x)
 		x1 = self.fc_state(x)
 		x1 = x1.view(x1.size(0), -1)
 		x2 = self.fc_power(x)
