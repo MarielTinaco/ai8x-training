@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import os
 import functools
+import json
 
 import torchvision
 from torchvision import transforms
@@ -34,6 +35,7 @@ class NILM(torch.utils.data.Dataset):
 		self.t_type = t_type
 		self.transform = transform
 		self.save_unquantized = save_unquantized
+		self.metadata_path = None
 
 		experiment = kwargs.get('experiment', DEFAULT_EXPERIMENT)
 		denoise = kwargs.get('denoise', False)
@@ -60,6 +62,8 @@ class NILM(torch.utils.data.Dataset):
 		train_x, val_x, test_x = split_data(x)
 		train_y, val_y, test_y = split_data(y)
 		train_z, val_z, test_z = split_data(z)
+
+		self.metadata_path = latest_dir / "metadata.json"
 
 		if self.d_type == "train":
 			x = train_x
@@ -90,6 +94,11 @@ class NILM(torch.utils.data.Dataset):
 		inputs, state = self.get_sample(index)
 		return torch.tensor(inputs).unsqueeze(-1).permute(1, 0).float(), torch.tensor(state).long().squeeze()
 
+	@property
+	def metadata(self):
+		with open(self.metadata_path, "r") as infile:
+                	return json.load(infile)
+
 class NILMAutoEncoder(NILM):
 
 	def __load(self,
@@ -112,6 +121,8 @@ class NILMAutoEncoder(NILM):
 		train_y, val_y, test_y = split_data(y)
 		train_z, val_z, test_z = split_data(z)
 
+		self.metadata_path = latest_dir / "metadata.json"
+
 		if self.d_type == "train":
 			x = train_x
 			y = train_y
@@ -131,6 +142,11 @@ class NILMAutoEncoder(NILM):
 	def __getitem__(self, index):
 		inputs, state = self.get_sample(index)
 		return torch.tensor(inputs).unsqueeze(-1).float(), torch.tensor(state).long().squeeze()
+
+	@property
+	def metadata(self):
+		with open(self.metadata_path, "r") as infile:
+                	return json.load(infile)
 
 class NILMRegress(torch.utils.data.Dataset):
     
@@ -173,6 +189,8 @@ class NILMRegress(torch.utils.data.Dataset):
 		train_y, val_y, test_y = split_data(y)
 		train_z, val_z, test_z = split_data(z)
 
+		self.metadata_path = latest_dir / "metadata.json"
+
 		if self.d_type == "train":
 			x = train_x
 			y = train_y
@@ -207,6 +225,11 @@ class NILMRegress(torch.utils.data.Dataset):
 		power = targets[1]
 		return torch.tensor(inputs).unsqueeze(-1).permute(1, 0).float(), \
 			(torch.tensor(state).long().squeeze(), torch.tensor(power).float().squeeze())
+
+	@property
+	def metadata(self):
+		with open(self.metadata_path, "r") as infile:
+                	return json.load(infile)
 
 class NILMAutoEncoderRegress(torch.utils.data.Dataset):
     
@@ -249,6 +272,8 @@ class NILMAutoEncoderRegress(torch.utils.data.Dataset):
 		train_y, val_y, test_y = split_data(y)
 		train_z, val_z, test_z = split_data(z)
 
+		self.metadata_path = latest_dir / "metadata.json"
+
 		if self.d_type == "train":
 			x = train_x
 			y = train_y
@@ -283,6 +308,11 @@ class NILMAutoEncoderRegress(torch.utils.data.Dataset):
 		power = targets[1]
 		return torch.tensor(inputs).unsqueeze(-1).float(), \
 			(torch.tensor(state).long().squeeze(), torch.tensor(power).float().squeeze())
+
+	@property
+	def metadata(self):
+		with open(self.metadata_path, "r") as infile:
+                	return json.load(infile)
 
 
 def ukdale_small_get_datasets(data, load_train=True, load_test=True):
