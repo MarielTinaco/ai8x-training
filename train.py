@@ -132,25 +132,40 @@ weight_sum = None
 weight_stddev = None
 weight_mean = None
 
-class DummyErrorMeter:
+class EACMeter:
 
-    def __init__(self, topk=[1], accuracy=False):
-        self.topk = np.sort(topk)
-        self.accuracy = accuracy
+    def __init__(self, *args, **kwargs):
+        self.softmax = nn.Softmax(dim=1)
         self.reset()
 
-    def add(self, output, target):
-        self.n = 0
-    
     def reset(self):
-        self.sum = {v: 0 for v in self.topk}
         self.n = 0
-    
-    def value(self, k=-1):
-        if k != -1:
-            return 0
-        else:
-            return [self.value(k_) for k_ in self.topk]
+        self.eacsum = 0.0
+
+    def add(self, output, target):
+
+        if not torch.is_tensor(output) and not torch.is_tensor(target):
+            output = torch.from_numpy(output)
+            target = torch.from_numpy(target)
+
+        B = output.size(0)
+
+        output_state = output[:,:2*5].reshape(B, 2, -1)
+        output_power = output[:,2*5:].reshape(B, 5, -1)
+
+        prob, pred_state = torch.max(self.softmax(output_state), 1)
+        pred_rms = torch.clamp(output_power, min=0, max=1)[:,2]
+
+        output = pred_state * pred_rms
+        target = target[0] * target[1]
+
+        self.n += 1
+        num = torch.abs(target - output).sum(axis=0)
+        den = 2*target.sum(axis=0)
+        self.eacsum += (1 - num/den)
+
+    def value(self):
+        return torch.mean(self.eacsum / max(1, self.n))    
 
 def main():
     """main"""
@@ -659,7 +674,7 @@ def main():
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss), ('mAP', mAP)]))
             elif args.multitarget:
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
-                                                                ('Top1', top1)]))
+                                                                ('Accuracy', top1)]))
             else:
                 if not args.regression:
                     stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
@@ -817,7 +832,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     if not args.regression:
         if args.multitarget:
-            classerr = DummyErrorMeter()
+            classerr = EACMeter()
         else:
             classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -918,7 +933,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                     (args.show_train_accuracy == 'last_batch'
                         and train_step >= len(train_loader)-2):
                     if args.multitarget:
-                        classerr.add(output, target)
+                        classerr.add(output.data, target)
                     elif len(output.data.shape) <= 2 or args.regression:
                         classerr.add(output.data, target)
                     else:
@@ -927,8 +942,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                      target.flatten())
                     
                     if args.multitarget:
-                        acc_stats.append([classerr.value(1),
-                                          classerr.value(min(args.num_classes, 5))])
+                        acc_stats.append([classerr.value()])
                     elif not args.regression:
                         acc_stats.append([classerr.value(1),
                                           classerr.value(min(args.num_classes, 5))])
@@ -992,12 +1006,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
             if not args.earlyexit_lossweights:
                 if args.multitarget:
                     if classerr.n != 0:
-                        errs['Top1'] = classerr.value(1)
-                        if args.num_classes > 5:
-                            errs['Top5'] = classerr.value(5)
+                        errs['Accuracy'] = classerr.value()
                     else:
-                        errs['Top1'] = None
-                        errs['Top5'] = None
+                        errs['Accuracy'] = None
+
                 elif not args.regression:
                     if classerr.n != 0:
                         errs['Top1'] = classerr.value(1)
@@ -1156,7 +1168,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
         mAP = 0.00
     
     if args.multitarget:
-        classerr = DummyErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        classerr = EACMeter()
     elif not args.regression:
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1359,7 +1371,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
                 if not args.obj_detection and not args.kd_relationbased:
                     if args.multitarget:
-                        classerr.add(output, target)
+                        classerr.add(output.data, target)
                     elif len(output.data.shape) <= 2 or args.regression:
                         classerr.add(output.data, target)
                     else:
@@ -1406,7 +1418,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         stats = (
                                 '',
                                 OrderedDict([('Loss', losses[OBJECTIVE_LOSS_KEY].mean),
-                                            ('Top1', classerr.value(1))])
+                                            ('Accuracy', classerr.value())])
                         )
                     else:
                         if not args.regression:
@@ -1508,8 +1520,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
         if args.multitarget:
 
-            msglogger.info('==> Top1: %.3f    Loss: %.3f\n',
-                               classerr.value()[0], losses[OBJECTIVE_LOSS_KEY].mean)
+            msglogger.info('==> Accuracy: %.3f    Loss: %.3f\n',
+                               classerr.value(), losses[OBJECTIVE_LOSS_KEY].mean)
+            return classerr.value(), 0, losses[OBJECTIVE_LOSS_KEY].mean, 0
 
         elif not args.regression:
             if args.num_classes > 5:
