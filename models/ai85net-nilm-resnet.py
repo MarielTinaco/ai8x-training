@@ -66,17 +66,26 @@ class AI85NILMRSTP(nn.Module):
                 bias=bias, batchnorm='Affine', **kwargs)
         self.resid_3 = ai8x.Add()
 
+        ## 4TH ##
+        self.conv10 = ai8x.FusedConv1dBNReLU(64, 92, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+        self.conv11_max = ai8x.FusedMaxPoolConv1dBNReLU(92, 92, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+        self.conv12 = ai8x.FusedConv1dBNReLU(92, 92, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+        self.resid_4 = ai8x.Add()
+
         ## EXTRA ##
-        self.conv10 = ai8x.FusedAvgPoolConv1dBNReLU(64, 92, 4, stride=1, padding=1,
+        self.conv13 = ai8x.FusedAvgPoolConv1dBNReLU(92, 128, 4, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv11 = ai8x.FusedConv1dBNReLU(92, 128, 3, stride=1, padding=1,
+        self.conv14 = ai8x.FusedConv1dBNReLU(128, 96, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
         
-        self.conv12 = ai8x.FusedConv1dBNReLU(128, 32, 3, stride=1, padding=1,
+        self.conv15 = ai8x.FusedConv1dBNReLU(96, 64, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
         
-        self.lin = ai8x.FusedLinearReLU(352, 128, bias=bias, **kwargs)
+        self.lin = ai8x.FusedLinearReLU(320, 128, bias=bias, **kwargs)
 
         ## MLP ##
         self.mlp1 = ai8x.FusedLinearReLU(128, 256, bias=bias, **kwargs)
@@ -110,12 +119,17 @@ class AI85NILMRSTP(nn.Module):
         x = self.conv9(x_res)           # 64x24
         x = self.resid_3(x, x_res)      # 64x24
 
+        x = self.conv10(x)              # 92x24
+        x_res = self.conv11_max(x)      # 92x12 (Conv+Pool+rounddown)
+        x = self.conv12(x_res)          # 92x12
+        x = self.resid_4(x, x_res)      # 92x12
+
         ## EXTRA ##
-        x = self.conv10(x)              # 92x11
-        x = self.conv11(x)              # 128x11
-        x = self.conv12(x)              # 32x11
-        x = self.dropout(x)             # 32x11
-        x = x.view(x.size(0), -1)       # 352
+        x = self.conv13(x)              # 128x5
+        x = self.conv14(x)              # 96x5
+        x = self.conv15(x)              # 64x5
+        x = self.dropout(x)             # 64x5
+        x = x.view(x.size(0), -1)       # 320
         x = self.lin(x)                 # 128
         x = self.mlp1(x)                # 256
 
