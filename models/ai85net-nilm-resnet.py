@@ -88,40 +88,43 @@ class AI85NILMRSTP(nn.Module):
         self.initWeights("kaiming")
 
     def forward(self, x):
-        ## INIT ##
-        x = self.conv1(x)
+        #                               # Conv: [(W−K+2P)/S]+1
+                                        # Pool: [(W-K)/S] + 1
+        ## INIT ##                      # 1x100
+        x = self.conv1(x)               # 32x100
 
         ## 1ST ##
-        x_res = self.conv2(x)
-        x = self.conv3(x_res)
-        x = self.resid_1(x, x_res)
+        x_res = self.conv2(x)           # 32x100
+        x = self.conv3(x_res)           # 32x100
+        x = self.resid_1(x, x_res)      # 32x100
 
         ## 2ND ##
-        x = self.conv4(x)
-        x_res = self.conv5_max(x)
-        x = self.conv6(x_res)
-        x = self.resid_2(x, x_res)
+        x = self.conv4(x)               # 48x98
+        x_res = self.conv5_max(x)       # 48x49 (Conv+Pool)
+        x = self.conv6(x_res)           # 48x49
+        x = self.resid_2(x, x_res)      # 48x49
         
         ## 3RD ##
-        x = self.conv7(x)
-        x_res = self.conv8_max(x)
-        x = self.conv9(x_res)
-        x = self.resid_3(x, x_res)
+        x = self.conv7(x)               # 64x49
+        x_res = self.conv8_max(x)       # 64x24 (Conv+Pool+rounddown)
+        x = self.conv9(x_res)           # 64x24
+        x = self.resid_3(x, x_res)      # 64x24
 
         ## EXTRA ##
-        x = self.conv10(x)
-        x = self.conv11(x)
-        x = self.conv12(x)
-        x = self.dropout(x)
-        x = x.view(x.size(0), -1)
-        x = self.lin(x)
-        x = self.mlp1(x)
+        x = self.conv10(x)              # 92x11
+        x = self.conv11(x)              # 128x11
+        x = self.conv12(x)              # 32x11
+        x = self.dropout(x)             # 32x11
+        x = x.view(x.size(0), -1)       # 352
+        x = self.lin(x)                 # 128
+        x = self.mlp1(x)                # 256
 
-        x1 = self.fc_state(x)
-        x1 = x1.view(x1.size(0), -1)
-        x2 = self.fc_power(x)
-        x2 = x2.view(x2.size(0), -1)
-        return torch.cat([x1, x2], dim=1)
+        x1 = self.fc_state(x)           
+        x1 = x1.view(x1.size(0), -1)    # 10
+        x2 = self.fc_power(x)           
+        x2 = x2.view(x2.size(0), -1)    # 25
+        x = torch.cat([x1, x2], dim=1)  # 35
+        return x
 
     def initWeights(self, weight_init="kaiming"):
         """
