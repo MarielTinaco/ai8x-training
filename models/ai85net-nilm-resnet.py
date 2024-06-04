@@ -35,14 +35,14 @@ class AI85NILMRSTP(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
         ## INIT ##
-        self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 1, stride=1, padding=0,
+        self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
         ## 1ST ##
-        self.conv2 = ai8x.FusedConv1dBNReLU(32, 32, 1, stride=1, padding=0,
+        self.conv2 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv3 = ai8x.FusedConv1dBNReLU(32, 32, 1, stride=1, padding=0,
+        self.conv3 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
         self.resid_1 = ai8x.Add()
 
