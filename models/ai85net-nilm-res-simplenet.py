@@ -34,37 +34,55 @@ class AI85NILMResSimpleNet(nn.Module):
                 dropout = 0.2
 
                 ## INIT ##
-                self.prep = ai8x.FusedConv1dBNReLU(num_channels, 16, 3, stride=1, padding=1,
+                self.prep = ai8x.FusedConv1dBNReLU(num_channels, 32, 3, stride=1, padding=2,
                         bias=bias, batchnorm='Affine', **kwargs)
 
                 ## 1ST ##
-                self.conv1_skip = ai8x.FusedMaxPoolConv1dBNReLU(16, 24, 1, stride=1, padding=1,
-                        pool_stride=1, pool_size=3, bias=bias, batchnorm='Affine', **kwargs)
-                self.conv1_1 = ai8x.FusedConv1dBNReLU(16, 24, 3, stride=1, padding=1,
+                # Captures initial causal features but keeps the prepped data in-tact in residue
+                self.conv0_1 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=1,
                         bias=bias, batchnorm='Affine', **kwargs)
-                self.dropout1_1 = nn.Dropout(dropout)
-                self.conv1_2 = ai8x.FusedConv1dBNReLU(24, 24, 3, stride=1, padding=1,
+
+                self.conv0_2 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=1,
                         bias=bias, batchnorm='Affine', **kwargs)
-                self.dropout1_2 = nn.Dropout(dropout)
-                self.resid_1 = ai8x.Add()
+
+                self.conv0_3 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=1,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.resid_0 = ai8x.Add()
 
                 ## 2ND ##
-                self.conv2_skip = ai8x.FusedMaxPoolConv1dBNReLU(24, 32, 3, stride=1, padding=0,
-                        pool_stride=1, pool_size=3, bias=bias, batchnorm='Affine', **kwargs)
-                self.conv2_1 = ai8x.FusedConv1dBNReLU(24, 32, 3, stride=1, padding=0,
+                self.conv1_1 = ai8x.FusedConv1dBNReLU(32, 48, 3, stride=1, padding=0,
                         bias=bias, batchnorm='Affine', **kwargs)
+                # residual max pool 2
+                self.conv1_2 = ai8x.FusedMaxPoolConv1dBNReLU(48, 48, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv1_3 = ai8x.FusedConv1dBNReLU(48, 48, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.resid_1 = ai8x.Add()
+
+                ## BOTTLENECK ##
+                self.downsample2 = ai8x.FusedMaxPoolConv1dBN(48, 128, 3, stride=1, padding=0,
+                        pool_stride=2, pool_size=2,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv2_1 = ai8x.FusedConv1dBNReLU(48, 64, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv2_2 = ai8x.FusedMaxPoolConv1dBNReLU(64, 96, 3, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv2_3 = ai8x.FusedMaxPoolConv1dBN(96, 128, 1, stride=1, padding=0,
+                        pool_stride=1, pool_size=1, bias=bias, batchnorm='Affine', **kwargs)
                 self.dropout2_1 = nn.Dropout(dropout)
-                self.conv2_2 = ai8x.FusedConv1dBNReLU(32, 32, 3, stride=1, padding=0,
-                        bias=bias, batchnorm='Affine', **kwargs)
                 self.dropout2_2 = nn.Dropout(dropout)
                 self.resid_2 = ai8x.Add()
 
-                last_layer = 32
+                self.conv_out1 = ai8x.FusedConv1dBNReLU(128, 96, 3, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv_out2 = ai8x.FusedConv1dBNReLU(96, 64, 3, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv_out3 = ai8x.FusedConv1dBNReLU(64, 48, 3, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
 
-                self.conv10 = ai8x.FusedMaxPoolConv1dBNReLU(last_layer, int(last_layer*0.8), 3, pool_stride=4,
-                                                            padding=0, bias=bias, batchnorm='Affine', **kwargs)
+                self.dropout = nn.Dropout(dropout)
 
-                self.lin = ai8x.FusedLinearReLU(550, 128, bias=bias, **kwargs)
+                self.lin = ai8x.FusedLinearReLU(816, 128, bias=bias, **kwargs)
 
                 ## MLP ##
                 self.mlp1 = ai8x.FusedLinearReLU(128, 256, bias=bias, **kwargs)
@@ -77,26 +95,34 @@ class AI85NILMResSimpleNet(nn.Module):
 
         def forward(self, x):
                                                         # 100
-                x = self.prep(x)                        # 16x100
+                x = self.prep(x)                        # 32x102
 
-                # resblock 1
-                x_res = self.conv1_1(x)                 # 24x100
-                x_res = self.dropout1_1(x_res)          # 24x100
-                x_res = self.conv1_2(x_res)             # 24x100
-                x_res = self.dropout1_2(x_res)          # 24x100
-                x = self.conv1_skip(x)                  # 24x100
-                x = self.resid_1(x, x_res)              # 24x100
+                ## 1ST ##
+                x = self.conv0_1(x)                     # 32x102
+                x_res = self.conv0_2(x)                 # 32x102
+                x = self.conv0_3(x_res)                 # 32x102
+                x = self.resid_0(x, x_res)              # 32x102
 
-                # resblock 2
-                x_res = self.conv2_1(x)                 # 32x98
-                x_res = self.dropout2_1(x_res)          # 32x98
-                x_res = self.conv2_2(x_res)             # 32x98
-                x_res = self.dropout2_2(x_res)          # 32x98
-                x = self.conv2_skip(x)                  # 32x98
-                x = self.resid_2(x, x_res)              # 32x96
+                ## 2ND ##
+                x = self.conv1_1(x)                     # 48x100
+                x_res = self.conv1_2(x)                 # 48x49 (Conv+Pool)
+                x = self.conv1_3(x_res)                 # 48x49
+                x = self.resid_1(x, x_res)              # 48x49
+                
+                # bottleneck residual block
+                x_i = x
+                x_i = self.downsample2(x_i)             # 128x23
+                x = self.conv2_1(x)                     # 64x49
+                x = self.conv2_2(x)                     # 96x23
+                x = self.dropout2_1(x)                  # 96x23
+                x = self.conv2_3(x)                     # 128x23
+                x = self.resid_2(x, x_i)                # 128x23
 
-                x = self.conv10(x)                      # (last_layer*0.8)x(48)
+                x = self.conv_out1(x)                   # 96x21
+                x = self.conv_out2(x)                   # 64x19
+                x = self.conv_out3(x)                   # 48x17
 
+                x = self.dropout(x)
                 x = x.view(x.size(0), -1)               # 768
                 x = self.lin(x)                         # 128
                 x = self.mlp1(x)                        # 256
