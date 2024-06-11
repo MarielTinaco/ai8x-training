@@ -1,0 +1,2 @@
+#!/bin/sh
+python train.py --epochs 20 --optimizer Adam --lr 0.001 --deterministic --compress policies/schedule-nilm-inception-resnet.yaml --model ai85nilminception2dressimplenet --batch-size 256 --dataset UKDALE_small_regress --multitarget --qat-policy policies/qat_policy_nilm_resnet.yaml --enable-tensorboard --use-bias --device MAX78000 "$@"
