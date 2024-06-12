@@ -56,16 +56,35 @@ class AI85NILM2DResidualSimplenet(nn.Module):
                                                 **kwargs)
                 self.res_conv2 = ai8x.FusedConv2dReLU(16, 20, 3, stride=1, padding=1, bias=bias, **kwargs)
                 self.res_conv3 = ai8x.FusedConv2dReLU(20, 20, 3, stride=1, padding=1, bias=bias, **kwargs)
-                self.res_conv4 = ai8x.FusedConv2dReLU(20, 20, 3, stride=1, padding=1, bias=bias, **kwargs)
+                self.res_conv4 = ai8x.FusedConv2dReLU(20, 32, 3, stride=1, padding=1, bias=bias, **kwargs)
                 self.resid1 = ai8x.Add()
 
-                self.res_conv5 = ai8x.FusedMaxPoolConv2dReLU(20, 20, 3, pool_size=2, pool_stride=2,
-                                                 stride=1, padding=1, bias=bias, **kwargs)
-                self.res_conv6 = ai8x.FusedConv2dReLU(20, 20, 3, stride=1, padding=1, bias=bias, **kwargs)
-                self.resid2 = ai8x.Add()
-                self.res_conv7 = ai8x.FusedConv2dReLU(20, 32, 3, stride=1, padding=1, bias=bias, **kwargs)
+                # self.res_conv5 = ai8x.FusedMaxPoolConv2dReLU(20, 20, 3, pool_size=2, pool_stride=1,
+                #                                  stride=1, padding=1, bias=bias, **kwargs)
+                # self.res_conv6 = ai8x.FusedConv2dReLU(20, 20, 3, stride=1, padding=1, bias=bias, **kwargs)
+                # self.resid2 = ai8x.Add()
+                # self.res_conv7 = ai8x.FusedConv2dReLU(20, 32, 3, stride=1, padding=1, bias=bias, **kwargs)
 
-                self.mlp1 = ai8x.FusedLinearReLU(800, 256, bias=bias, **kwargs)
+                ## BOTTLENECK ##
+                self.downsample1 = ai8x.FusedMaxPoolConv2dBN(32, 64, 3, stride=1, padding=1,
+                        pool_stride=2, pool_size=2,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv1_1 = ai8x.FusedConv2dBNReLU(32, 48, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv1_2 = ai8x.FusedMaxPoolConv2dBNReLU(48, 48, 3, stride=1, padding=1,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv1_3 = ai8x.FusedMaxPoolConv2dBN(48, 64, 1, stride=1, padding=0,
+                        pool_stride=1, pool_size=1, bias=bias, batchnorm='Affine', **kwargs)
+                self.dropout1_1 = nn.Dropout(dropout)
+                self.dropout1_2 = nn.Dropout(dropout)
+                self.resid_1 = ai8x.Add()
+
+                self.conv10 = ai8x.FusedConv2dBNReLU(64, 48, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+                self.conv11 = ai8x.FusedConv2dBNReLU(48, 32, 1, stride=1, padding=0,
+                        bias=bias, batchnorm='Affine', **kwargs)
+
+                self.mlp1 = ai8x.FusedLinearReLU(640, 256, bias=bias, **kwargs)
 
                 self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
                 self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, **kwargs)
@@ -88,18 +107,29 @@ class AI85NILM2DResidualSimplenet(nn.Module):
 
                 x = torch.cat((x_0, x_1, x_2, x_3), dim=1)
 
-                x = x.view(x.shape[0], x.shape[1], 10, -1)      # 96 x 10 x 10
+                x = x.view(x.shape[0], x.shape[1], 20, -1)      # 96 x 10 x 10
 
-                x = self.res_conv1(x)          # 16x10x10
-                x_res = self.res_conv2(x)      # 20x10x10
-                x = self.res_conv3(x_res)      # 20x10x10
-                x = self.resid1(x, x_res)      # 20x10x10
-                x = self.res_conv4(x)          # 20x10x10
+                x = self.res_conv1(x)          # 16x20x5
+                x_res = self.res_conv2(x)      # 20x20x5
+                x = self.res_conv3(x_res)      # 20x20x5
+                x = self.resid1(x, x_res)      # 20x20x5
+                x = self.res_conv4(x)          # 20x20x5
 
-                x_res = self.res_conv5(x)      # 20x5x5
-                x = self.res_conv6(x_res)      # 20x5x5
-                x = self.resid2(x, x_res)      # 20x5x5
-                x = self.res_conv7(x)          # 44x5x5
+                # x_res = self.res_conv5(x)      # 20x9x9
+                # x = self.res_conv6(x_res)      # 20x9x9
+                # x = self.resid2(x, x_res)      # 20x9x9
+                # x = self.res_conv7(x)          # 44x9x9
+
+                x_i = self.downsample1(x)             # 64x2x2
+
+                x = self.conv1_1(x)                     # 48x2x2
+                x = self.conv1_2(x)                     # 48x2x2
+                x = self.dropout1_1(x)                  # 48x2x2
+                x = self.conv1_3(x)                     # 64x2x2
+                x = self.resid_1(x, x_i)                # 64x2x2
+
+                x = self.conv10(x)
+                x = self.conv11(x)
 
                 x = x.view(x.shape[0], -1)
 
