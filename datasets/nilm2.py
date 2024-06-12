@@ -315,6 +315,96 @@ class NILMAutoEncoderRegress(torch.utils.data.Dataset):
                 	return json.load(infile)
 
 
+class NILMSlidingWindow(torch.utils.data.Dataset):
+
+	class_dict = {"fridge" : 0, "washer dryer" : 1, "kettle" : 2, "dish washer" : 3, "microwave" : 4}
+
+	def __init__(self, root, classes, d_type, t_type="ukdale", transform=None, 
+	      		 quantization_scheme=None, augmentation=None, download=False, 
+				 save_unquantized=False, **kwargs):
+	
+		self.root = Path(root)
+		self.classes = classes
+		self.d_type = d_type
+		self.t_type = t_type
+		self.transform = transform
+		self.save_unquantized = save_unquantized
+
+		experiment = kwargs.get('experiment', DEFAULT_EXPERIMENT)
+		denoise = kwargs.get('denoise', False)
+		self.seq_len = kwargs.get('seq_len')
+		self.window_len = kwargs.get('window_len')
+		self.data, self.targets = self.__load(experiment=experiment, denoise=denoise)
+		self.indices = np.arange(self.data.shape[0])
+
+	def __load(self,
+	    	   experiment,
+		   denoise,
+		   data_type="training"):
+
+		dirs = Path.iterdir(self.root / "NILM" )
+		dirs = filter(lambda x : x.name.split("_")[:2] == [experiment, self.t_type], dirs)
+		latest_dir = max(dirs, key= lambda dir : dir.stat().st_mtime_ns)
+
+		if denoise:
+			x = np.load(latest_dir / data_type / "denoise_inputs.npy")
+		else:
+			x = np.load(latest_dir / data_type / "noise_inputs.npy")
+		y = np.load(latest_dir / data_type / "targets.npy")
+		z = np.load(latest_dir / data_type / "states.npy")
+
+		train_x, val_x, test_x = split_data(x)
+		train_y, val_y, test_y = split_data(y)
+		train_z, val_z, test_z = split_data(z)
+
+		self.metadata_path = latest_dir / "metadata.json"
+
+		if self.d_type == "train":
+			x = train_x
+			y = train_y
+			z = train_z
+		elif self.d_type == "test":
+			x = test_x
+			y = test_y
+			z = test_z
+		else:
+			x = val_x
+			y = val_y
+			z = val_z
+
+		return x, (z, y)
+
+	def __len__(self):
+		return self.data.shape[0] - self.seq_len
+
+	def get_sample(self, index):
+		indices = self.indices[index : index + self.seq_len]
+		inds_inputs=sorted(indices[:self.seq_len])
+		inds_targs=sorted(indices[self.seq_len-1:self.seq_len])
+		
+		states = self.targets[0]
+		power = self.targets[1]
+
+		sequence = self.data[inds_inputs]
+		sliding_window_data = np.zeros(shape=(self.window_len, self.window_len))
+		for i in range(self.window_len):
+			sliding_window_data[i, :] = sequence[i+1 : i+self.window_len+1]
+
+		return sliding_window_data, (states[inds_targs], power[inds_targs])
+
+
+	def __getitem__(self, index):
+		inputs, targets = self.get_sample(index)
+		state = targets[0]
+		power = targets[1]
+		return torch.tensor(inputs).unsqueeze(0).float(), \
+			(torch.tensor(state).long().squeeze(), torch.tensor(power).float().squeeze())
+
+	@property
+	def metadata(self):
+		with open(self.metadata_path, "r") as infile:
+                	return json.load(infile)
+
 def ukdale_small_get_datasets(data, load_train=True, load_test=True):
 
 	(data_dir, args) = data
@@ -420,6 +510,32 @@ def ukdale_small_autoencoder_regress_get_datasets(data, load_train=True, load_te
 	
 	return train_dataset, test_dataset
 
+def ukdale_small_sliding_window_get_datasets(data, load_train=True, load_test=True):
+
+	(data_dir, args) = data
+
+	classes = ['fridge', 'washer dryer', 'kettle', 'dish washer', 'microwave']
+
+	transform = transforms.Compose([
+					ai8x.normalize(args=args)
+    			])
+
+	if load_train:
+		train_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100, window_len=50)
+	else:
+		train_dataset = None
+
+	if load_test:
+		test_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 100, window_len=50)
+	else:
+		test_dataset = None
+
+	return train_dataset, test_dataset
+
 datasets = [
 	{
 		'name' : 'UKDALE_small',
@@ -448,5 +564,12 @@ datasets = [
 		'output' : (0, 1, 2, 3, 4),
 		'weights' : (1, 1),
 		'loader' : ukdale_small_autoencoder_regress_get_datasets,
-	}
+	},
+	{
+		'name' : 'UKDALE_small_sliding_window',
+		'input' : (1, 50, 50),
+		'output' : (0, 1, 2, 3, 4),
+		'weights' : (1, 1),
+		'loader' : ukdale_small_sliding_window_get_datasets,
+	},
 ]
