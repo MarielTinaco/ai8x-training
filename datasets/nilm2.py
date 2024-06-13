@@ -371,14 +371,10 @@ class NILMSlidingWindow(torch.utils.data.Dataset):
 			x = train_x
 			y = train_y
 			z = train_z
-		elif self.d_type == "test":
-			x = test_x
-			y = test_y
-			z = test_z
 		else:
-			x = val_x
-			y = val_y
-			z = val_z
+			x = np.concatenate([val_x, test_x])
+			y = np.concatenate([val_y, test_y]) 
+			z = np.concatenate([val_z, test_z])
 
 		return x, (z, y)
 
