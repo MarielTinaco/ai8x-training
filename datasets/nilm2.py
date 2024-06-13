@@ -333,7 +333,15 @@ class NILMSlidingWindow(torch.utils.data.Dataset):
 		experiment = kwargs.get('experiment', DEFAULT_EXPERIMENT)
 		denoise = kwargs.get('denoise', False)
 		self.seq_len = kwargs.get('seq_len')
-		self.window_len = kwargs.get('window_len')
+		self.height = kwargs.get('height')
+		self.width = kwargs.get('width')
+
+		self.stride = (self.seq_len - self.width) / self.height
+
+		assert int(self.stride) == self.stride, f"({self.seq_len} - {self.width}) / {self.height} = {self.stride} stride must be an integer"
+
+		self.stride = int(self.stride)
+
 		self.data, self.targets = self.__load(experiment=experiment, denoise=denoise)
 		self.indices = np.arange(self.data.shape[0])
 
@@ -386,9 +394,9 @@ class NILMSlidingWindow(torch.utils.data.Dataset):
 		power = self.targets[1]
 
 		sequence = self.data[inds_inputs]
-		sliding_window_data = np.zeros(shape=(self.window_len, self.window_len))
-		for i in range(self.window_len):
-			sliding_window_data[i, :] = sequence[i+1 : i+self.window_len+1]
+		sliding_window_data = np.zeros(shape=(self.height, self.width))
+		for i in range(self.height):
+			sliding_window_data[i, :] = sequence[self.stride * i : self.stride * i + self.width]
 
 		return sliding_window_data, (states[inds_targs], power[inds_targs])
 
@@ -523,14 +531,16 @@ def ukdale_small_sliding_window_get_datasets(data, load_train=True, load_test=Tr
 	if load_train:
 		train_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
 			      					transform=transform, download=False,
-									seq_len = 100, window_len=50)
+									seq_len = 100, width = 36,
+									height = 32)
 	else:
 		train_dataset = None
 
 	if load_test:
 		test_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
 			      					transform=transform, download=False,
-									seq_len = 100, window_len=50)
+									seq_len = 100, width=36,
+									height= 32)
 	else:
 		test_dataset = None
 
@@ -567,7 +577,7 @@ datasets = [
 	},
 	{
 		'name' : 'UKDALE_small_sliding_window',
-		'input' : (1, 50, 50),
+		'input' : (1, 32, 36),
 		'output' : (0, 1, 2, 3, 4),
 		'weights' : (1, 1),
 		'loader' : ukdale_small_sliding_window_get_datasets,

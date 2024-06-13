@@ -26,8 +26,8 @@ class AI85ResidualSimpleNet(nn.Module):
     def __init__(
             self,
             num_classes=5,
-            num_channels=50,
-            dimensions=(50, 50),  # pylint: disable=unused-argument
+            num_channels=32,
+            dimensions=(32, 36),  # pylint: disable=unused-argument
             bias=False,
             **kwargs
     ):
@@ -56,7 +56,7 @@ class AI85ResidualSimpleNet(nn.Module):
         self.conv12_1 = ai8x.FusedConv2dReLU(128, 128, 1, stride=1, padding=0, bias=bias, **kwargs)
         self.conv13 = ai8x.FusedMaxPoolConv2dReLU(128, 128, 3, pool_size=2, pool_stride=2,
                                                   stride=1, padding=1, bias=bias, **kwargs)
-    
+
         self.mlp1 = ai8x.FusedLinearReLU(128, 256, bias=bias, **kwargs)
 
         self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
@@ -64,7 +64,7 @@ class AI85ResidualSimpleNet(nn.Module):
 
     def forward(self, x):  # pylint: disable=arguments-differ
         """Forward prop"""
-        x = self.conv1(x)          # 16x50x50
+        x = self.conv1(x)          # 16x32x36
         x_res = self.conv2(x)      # 20x50x50
         x = self.conv3(x_res)      # 20x50x50
         x = self.resid1(x, x_res)  # 20x50x50
