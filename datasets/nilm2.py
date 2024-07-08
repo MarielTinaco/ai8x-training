@@ -21,6 +21,13 @@ def split_data(data):
 	test = data[split_2:]
 	return train, validation, test
 
+def split_data_2(data):
+	split_1 = int(0.15 * len(data))
+	test = data[:split_1]
+	train = data[split_1:]
+	return test, train
+
+
 class NILM(torch.utils.data.Dataset):
     
 	class_dict = {"fridge" : 0, "washer dryer" : 1, "kettle" : 2, "dish washer" : 3, "microwave" : 4}
@@ -361,9 +368,9 @@ class NILMSlidingWindow(torch.utils.data.Dataset):
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
 
-		train_x, val_x, test_x = split_data(x)
-		train_y, val_y, test_y = split_data(y)
-		train_z, val_z, test_z = split_data(z)
+		test_x, train_x = split_data_2(x)
+		test_y, train_y = split_data_2(y)
+		test_z, train_z = split_data_2(z)
 
 		self.metadata_path = latest_dir / "metadata.json"
 
@@ -372,9 +379,9 @@ class NILMSlidingWindow(torch.utils.data.Dataset):
 			y = train_y
 			z = train_z
 		else:
-			x = np.concatenate([val_x, test_x])
-			y = np.concatenate([val_y, test_y]) 
-			z = np.concatenate([val_z, test_z])
+			x = test_x
+			y = test_y 
+			z = test_z
 
 		return x, (z, y)
 
@@ -527,16 +534,16 @@ def ukdale_small_sliding_window_get_datasets(data, load_train=True, load_test=Tr
 	if load_train:
 		train_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
 			      					transform=transform, download=False,
-									seq_len = 100, width = 36,
-									height = 32)
+									seq_len = 100, width = 20,
+									height = 20)
 	else:
 		train_dataset = None
 
 	if load_test:
 		test_dataset = NILMSlidingWindow(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
 			      					transform=transform, download=False,
-									seq_len = 100, width=36,
-									height= 32)
+									seq_len = 100, width=20,
+									height= 20)
 	else:
 		test_dataset = None
 
@@ -573,7 +580,7 @@ datasets = [
 	},
 	{
 		'name' : 'UKDALE_small_sliding_window',
-		'input' : (1, 32, 36),
+		'input' : (1, 20, 20),
 		'output' : (0, 1, 2, 3, 4),
 		'weights' : (1, 1),
 		'loader' : ukdale_small_sliding_window_get_datasets,
