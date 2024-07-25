@@ -184,13 +184,17 @@ class NILMRegress(torch.utils.data.Dataset):
 		dirs = Path.iterdir(self.root / "NILM" )
 		dirs = filter(lambda x : x.name.split("_")[:2] == [experiment, self.t_type], dirs)
 		latest_dir = max(dirs, key= lambda dir : dir.stat().st_mtime_ns)
-
 		if denoise:
 			x = np.load(latest_dir / data_type / "denoise_inputs.npy")
 		else:
 			x = np.load(latest_dir / data_type / "noise_inputs.npy")
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
+
+
+		print(x.shape)
+		print(y.shape)
+		print(z.shape)
 
 		train_x, val_x, test_x = split_data(x)
 		train_y, val_y, test_y = split_data(y)
@@ -549,6 +553,33 @@ def ukdale_small_sliding_window_get_datasets(data, load_train=True, load_test=Tr
 
 	return train_dataset, test_dataset
 
+
+def ukdale_small_512_regress_get_datasets(data, load_train=True, load_test=True):
+
+	(data_dir, args) = data
+
+	classes = ['fridge', 'washer dryer', 'kettle', 'dish washer', 'microwave']
+
+	transform = transforms.Compose([
+					ai8x.normalize(args=args)
+    			])
+
+	if load_train:
+		train_dataset = NILMRegress(root=data_dir, classes=classes, d_type='train', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 512)
+	else:
+		train_dataset = None
+
+	if load_test:
+		test_dataset = NILMRegress(root=data_dir, classes=classes, d_type='test', t_type='ukdale',
+			      					transform=transform, download=False,
+									seq_len = 512)
+	else:
+		test_dataset = None
+
+	return train_dataset, test_dataset
+
 datasets = [
 	{
 		'name' : 'UKDALE_small',
@@ -584,5 +615,12 @@ datasets = [
 		'output' : (0, 1, 2, 3, 4),
 		'weights' : (1, 1),
 		'loader' : ukdale_small_sliding_window_get_datasets,
+	},
+	{
+		'name' : 'UKDALE_small_512_regress',
+		'input' : (1, 512),
+		'output' : (0, 1, 2, 3, 4),
+		'weights' : (1, 1),
+		'loader' : ukdale_small_512_regress_get_datasets,
 	},
 ]
