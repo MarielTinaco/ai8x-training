@@ -141,6 +141,10 @@ class EACMeter:
     def reset(self):
         self.n = 0
         self.eacsum = 0.0
+        # self.full_output = torch.empty(size=(1,5), dtype=torch.float32)
+        # self.full_target = torch.empty(size=(1,5), dtype=torch.float32)
+        self.full_target = None
+        self.full_output = None
 
     def add(self, output, target):
 
@@ -159,13 +163,21 @@ class EACMeter:
         output = pred_state * pred_rms
         target = target[0] * target[1]
 
-        self.n += 1
-        num = torch.abs(target - output).sum(axis=0)
-        den = 2*target.sum(axis=0)
-        self.eacsum += (1 - num/den)
+        if self.full_output is None:
+            self.full_output = output.cpu()
+        else:
+            self.full_output = torch.cat([self.full_output, output.cpu()], dim=0)
+
+        if self.full_target is None:
+            self.full_target = target.cpu()
+        else:
+            self.full_target = torch.cat([self.full_target, target.cpu()], dim=0)
 
     def value(self):
-        return torch.mean(self.eacsum / max(1, self.n))    
+        num = torch.abs(self.full_target - self.full_output).sum(axis=0)
+        den = 2*self.full_target.sum(axis=0)
+        eac = (1 - num/den)
+        return eac.mean()
 
 def main():
     """main"""

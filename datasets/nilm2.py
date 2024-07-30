@@ -191,11 +191,6 @@ class NILMRegress(torch.utils.data.Dataset):
 		y = np.load(latest_dir / data_type / "targets.npy")
 		z = np.load(latest_dir / data_type / "states.npy")
 
-
-		print(x.shape)
-		print(y.shape)
-		print(z.shape)
-
 		train_x, val_x, test_x = split_data(x)
 		train_y, val_y, test_y = split_data(y)
 		train_z, val_z, test_z = split_data(z)
