@@ -179,6 +179,33 @@ class EACMeter:
         eac = (1 - num/den)
         return eac.mean()
 
+class CustomMSEMeter(tnt.MSEMeter):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.softmax = nn.Softmax(dim=1)
+        self.reset()
+
+    def add(self, output, target):
+
+        if not torch.is_tensor(output) and not torch.is_tensor(target):
+            output = torch.from_numpy(output)
+            target = torch.from_numpy(target)
+
+        B = output.size(0)
+
+        output_state = output[:,:2*5].reshape(B, 2, -1)
+        output_power = output[:,2*5:].reshape(B, 5, -1)
+
+        prob, pred_state = torch.max(self.softmax(output_state), 1)
+        pred_rms = torch.clamp(output_power, min=0, max=1)[:,2]
+
+        output = pred_state * pred_rms
+        target = target[0] * target[1]
+
+        return super().add(output, target)
+    
+
 def main():
     """main"""
     script_dir = os.path.dirname(__file__)
@@ -686,7 +713,7 @@ def main():
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss), ('mAP', mAP)]))
             elif args.multitarget:
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
-                                                                ('Accuracy', top1)]))
+                                                                 ('MSE', top1)]))
             else:
                 if not args.regression:
                     stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
@@ -844,7 +871,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     if not args.regression:
         if args.multitarget:
-            classerr = EACMeter()
+            classerr = CustomMSEMeter()
         else:
             classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1018,9 +1045,9 @@ def train(train_loader, model, criterion, optimizer, epoch,
             if not args.earlyexit_lossweights:
                 if args.multitarget:
                     if classerr.n != 0:
-                        errs['Accuracy'] = classerr.value()
+                        errs['MSE'] = classerr.value()
                     else:
-                        errs['Accuracy'] = None
+                        errs['MSE'] = None
 
                 elif not args.regression:
                     if classerr.n != 0:
@@ -1180,7 +1207,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
         mAP = 0.00
     
     if args.multitarget:
-        classerr = EACMeter()
+        classerr = CustomMSEMeter()
     elif not args.regression:
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1329,10 +1356,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
             elif args.multitarget:
                 inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target]
                 # compute output from model
-                if args.kd_relationbased:
-                    output_state, output_power = args.kd_policy.forward(inputs)
-                else:
-                    output = model(inputs)
+                output = model(inputs)
                 # correct output for accurate loss calculation
                 if args.act_mode_8bit:
                     output /= 128.
@@ -1340,6 +1364,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         if (hasattr(model.__dict__['_modules'][key], 'wide')
                                 and model.__dict__['_modules'][key].wide):
                             output /= 256.
+                    
+                    # RMS estimation is regression
+                    target[1] = target[1] / 128.
 
             else:
                 inputs, target = inputs.to(args.device), target.to(args.device)
