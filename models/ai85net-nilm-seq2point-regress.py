@@ -35,31 +35,46 @@ class AI85NILMSeq2PointRegress(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-        self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 9, stride=1, padding=0,
+        self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 5, stride=1, padding=2,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv2 = ai8x.FusedConv1dBNReLU(32, 32, 8, stride=1, padding=0,
+        self.conv2 = ai8x.FusedConv1dBNReLU(32, 32, 5, stride=1, padding=2,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(32, 48, 6, stride=1, padding=0,
+        self.conv3 = ai8x.FusedConv1dBNReLU(32, 48, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(48, 64, 5, stride=1, padding=0,
+        self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(48, 48, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv5 = ai8x.FusedConv1dBNReLU(64, 64, 5, stride=1, padding=0,
+        self.conv5 = ai8x.FusedConv1dBNReLU(48, 48, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv6 = ai8x.FusedAvgPoolConv1dBNReLU(64, 92, 4, stride=1, padding=1,
+        self.conv6 = ai8x.FusedMaxPoolConv1dBNReLU(48, 64, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv7 = ai8x.FusedConv1dBNReLU(92, 128, 3, stride=1, padding=1,
-                bias=bias, batchnorm='Affine', **kwargs)
-        
-        self.conv8 = ai8x.FusedConv1dBNReLU(128, 32, 3, stride=1, padding=1,
+        self.conv7 = ai8x.FusedConv1dBNReLU(64, 64, 3, stride=1, padding=1,
                 bias=bias, batchnorm='Affine', **kwargs)
 
-        self.mlp1 = ai8x.FusedLinearReLU(128, 256, bias=bias, **kwargs)
+        self.conv8 = ai8x.FusedAvgPoolConv1dBNReLU(64, 96, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv9 = ai8x.FusedConv1dBNReLU(96, 96, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv10 = ai8x.FusedMaxPoolConv1dBNReLU(96, 96, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv11 = ai8x.FusedMaxPoolConv1dBNReLU(96, 128, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv12 = ai8x.FusedAvgPoolConv1dBNReLU(128, 128, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.conv13 = ai8x.FusedConv1dBNReLU(128, 256, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
+
+        self.mlp1 = ai8x.FusedLinearReLU(256, 256, bias=bias, **kwargs)
 
         self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
         self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, **kwargs)
@@ -67,14 +82,19 @@ class AI85NILMSeq2PointRegress(nn.Module):
         self.initWeights("kaiming")
 
     def forward(self, x):
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.conv5(x)
-        x = self.conv6(x)
-        x = self.conv7(x)
-        x = self.conv8(x)
+        x = self.conv1(x)       # 100
+        x = self.conv2(x)       # 100
+        x = self.conv3(x)       # 100
+        x = self.conv4(x)       # 50
+        x = self.conv5(x)       # 50
+        x = self.conv6(x)       # 25
+        x = self.conv7(x)       # 25
+        x = self.conv8(x)       # 12
+        x = self.conv9(x)       # 12
+        x = self.conv10(x)      # 6
+        x = self.conv11(x)       # 3
+        x = self.conv12(x)       # 1
+        x = self.conv13(x)       # 1
         x = self.dropout(x)
         x = x.view(x.size(0), -1)
         x = self.mlp1(x)
