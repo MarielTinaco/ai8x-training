@@ -179,11 +179,12 @@ class EACMeter:
         eac = (1 - num/den)
         return eac.mean()
 
-class CustomMSEMeter(tnt.MSEMeter):
+class CustomNILMErrorMeter:
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
         self.softmax = nn.Softmax(dim=1)
+        self.mse_meter = tnt.MSEMeter()
+
         self.reset()
 
     def add(self, output, target):
@@ -203,8 +204,17 @@ class CustomMSEMeter(tnt.MSEMeter):
         output = pred_state * pred_rms
         target = target[0] * target[1]
 
-        return super().add(output, target)
-    
+        self.mse_meter.add(output, target)
+
+    def value(self):
+        mse = self.mse_meter.value()
+
+        return {
+                "mse" : mse,
+        }
+
+    def reset(self):
+        self.mse_meter.reset()
 
 def main():
     """main"""
@@ -871,7 +881,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     if not args.regression:
         if args.multitarget:
-            classerr = CustomMSEMeter()
+            classerr = CustomNILMErrorMeter()
         else:
             classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -981,7 +991,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
                                      target.flatten())
                     
                     if args.multitarget:
-                        acc_stats.append([classerr.value()])
+                        acc_stats.append([classerr.value()["mse"]])
                     elif not args.regression:
                         acc_stats.append([classerr.value(1),
                                           classerr.value(min(args.num_classes, 5))])
@@ -1044,8 +1054,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
             errs = OrderedDict()
             if not args.earlyexit_lossweights:
                 if args.multitarget:
-                    if classerr.n != 0:
-                        errs['MSE'] = classerr.value()
+                    if classerr.mse_meter.n != 0:
+                        errs['MSE'] = classerr.value()["mse"]
                     else:
                         errs['MSE'] = None
 
@@ -1207,7 +1217,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
         mAP = 0.00
     
     if args.multitarget:
-        classerr = CustomMSEMeter()
+        classerr = CustomNILMErrorMeter()
     elif not args.regression:
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1457,7 +1467,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         stats = (
                                 '',
                                 OrderedDict([('Loss', losses[OBJECTIVE_LOSS_KEY].mean),
-                                            ('MSE', classerr.value())])
+                                            ('MSE', classerr.value()["mse"])])
                         )
                     else:
                         if not args.regression:
@@ -1559,9 +1569,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
         if args.multitarget:
 
-            msglogger.info('==> MSE: %.3f    Loss: %.3f\n',
-                               classerr.value(), losses[OBJECTIVE_LOSS_KEY].mean)
-            return classerr.value(), 0, losses[OBJECTIVE_LOSS_KEY].mean, 0
+            msglogger.info('==> MSE: %.3f       Loss: %.3f\n',
+                               classerr.value()["mse"], losses[OBJECTIVE_LOSS_KEY].mean)
+            return classerr.value()["mse"], 0, losses[OBJECTIVE_LOSS_KEY].mean, 0
 
         elif not args.regression:
             if args.num_classes > 5:
