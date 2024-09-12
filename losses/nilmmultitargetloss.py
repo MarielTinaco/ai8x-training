@@ -33,12 +33,12 @@ class NILMMultiTargetLoss(torch.nn.Module):
                 target_state = targets[0]
                 target_power = targets[1]
 
+                prob, pred = torch.max(self.softmax(input_state), 1)
+
                 ## States Loss
-                input_state_logsoft = self.logsoftmax(input_state)
-                loss_nll = self.states_loss(input_state_logsoft, target_state)
+                loss_nll = self.states_loss(self.logsoftmax(input_state), target_state)
 
                 ## Power Loss
-                prob, prod = torch.max(self.softmax(input_state_logsoft), 1)
                 prob = prob.unsqueeze(1).expand_as(input_power)
                 loss_mse = self.rmse_loss(input_power, target_power)
 

@@ -198,7 +198,7 @@ class CustomMSEMeter(tnt.MSEMeter):
         output_power = output[:,2*5:].reshape(B, 5, -1)
 
         prob, pred_state = torch.max(self.softmax(output_state), 1)
-        pred_rms = torch.clamp(output_power, min=0, max=1)[:,2]
+        pred_rms = output_power[:,2]
 
         output = pred_state * pred_rms
         target = target[0] * target[1]
@@ -1457,7 +1457,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         stats = (
                                 '',
                                 OrderedDict([('Loss', losses[OBJECTIVE_LOSS_KEY].mean),
-                                            ('Accuracy', classerr.value())])
+                                            ('MSE', classerr.value())])
                         )
                     else:
                         if not args.regression:
@@ -1559,7 +1559,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
         if args.multitarget:
 
-            msglogger.info('==> Accuracy: %.3f    Loss: %.3f\n',
+            msglogger.info('==> MSE: %.3f    Loss: %.3f\n',
                                classerr.value(), losses[OBJECTIVE_LOSS_KEY].mean)
             return classerr.value(), 0, losses[OBJECTIVE_LOSS_KEY].mean, 0
 
