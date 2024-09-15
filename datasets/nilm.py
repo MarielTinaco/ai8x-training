@@ -67,11 +67,15 @@ class Seq2PointNILM(torch.utils.data.Dataset):
         power = torch.transpose(power.reshape((-1, 5)), 1, 0)
         power = power.type(torch.FloatTensor)
 
+        state = torch.tensor(state)
+        state = torch.transpose(state.reshape((-1, 5)), 1, 0)
+        state = state.type(torch.IntTensor)
+
         if self.transform:
             power = self.transform(power)
 
         return inputs.permute(1, 0).float(), \
-            (torch.tensor(state).long().squeeze(), power.float().squeeze())
+            (state.long().squeeze(), power.float().squeeze())
 
 
 def seq2pointnilm_get_datasets(data, load_train=True, load_test=True):

@@ -102,6 +102,7 @@ from pytorch_metric_learning.distances import CosineSimilarity
 from pytorch_metric_learning.utils.accuracy_calculator import AccuracyCalculator
 from pytorch_metric_learning.utils.inference import CustomKNN
 from torchmetrics.detection.map import MAP as MeanAveragePrecision
+from sklearn.preprocessing import minmax_scale
 
 # pylint: enable=no-name-in-module
 import ai8x
@@ -288,8 +289,9 @@ class CustomNILMRegressionMetrics:
         state = torch.cat([x['state'] for x in self.outputs], 0).cpu().numpy().astype(np.int32)
 
         for idx, app_data in enumerate(self.appliance_data):
-            power[:,idx] = power[:,idx] * (app_data["max"]-app_data["min"]) + app_data["min"]
-            pred_power[:,:,idx] = pred_power[:,:,idx] * (app_data["max"]-app_data["min"]) + app_data["min"]
+            power[:,idx] = minmax_scale(power[:,idx], (app_data["min"], app_data["max"]))
+            pred_power[:,:,idx] = np.clip(pred_power[:,:,idx], -1, 1)
+            pred_power[:,:,idx] = minmax_scale(pred_power[:,:,idx], (app_data["min"], app_data["max"]))
 
         y_pred = pred_power[:,2]
 
@@ -1465,7 +1467,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         if (hasattr(model.__dict__['_modules'][key], 'wide')
                                 and model.__dict__['_modules'][key].wide):
                             output /= 256.
-                    
+
                     # RMS estimation is regression
                     target[1] = target[1] / 128.
 
