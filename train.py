@@ -112,6 +112,8 @@ import sample
 import yamlwriter
 from losses.dummyloss import DummyLoss
 from losses.multiboxloss import MultiBoxLoss
+from losses.nilmmultitargetloss import NILMMultiTargetLoss
+from metrics.nilm import CustomNILMRegressionMetrics
 from nas import parse_nas_yaml
 from utils import kd_relationbased, model_wrapper, object_detection_utils, parse_obj_detection_yaml
 
@@ -427,6 +429,15 @@ def main():
                                  alpha=obj_detection_params['multi_box_loss']['alpha'],
                                  neg_pos_ratio=obj_detection_params['multi_box_loss']
                                  ['neg_pos_ratio'], device=args.device).to(args.device)
+    elif (args.nilm and args.multitarget):
+        if 'weight' in selected_source:
+            nll_criterion = nn.NLLLoss(
+                torch.tensor(selected_source['weight'], dtype=torch.float)
+            ).to(args.device)
+        else:
+            nll_criterion = nn.NLLLoss().to(args.device)
+
+        criterion = NILMMultiTargetLoss(nll_criterion, num_classes=args.num_classes)
     elif args.dr:
         criterion = pml_losses.SubCenterArcFaceLoss(num_classes=args.num_classes,
                                                     embedding_size=args.dr,
@@ -694,6 +705,9 @@ def main():
             if args.obj_detection:
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
                                                                  ('mAP', mAP)]))
+            elif (args.nilm and args.multitarget):
+                stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
+                                                                 ]))
             elif args.regression:
                 stats = ('Performance/Validation/', OrderedDict([('Loss', vloss),
                                                                  ('MSE', top1)]))
@@ -857,7 +871,10 @@ def train(train_loader, model, criterion, optimizer, epoch,
                           (OBJECTIVE_LOSS_KEY, tnt.AverageValueMeter())])
 
     if not args.regression:
-        classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
+        if (args.nilm and args.multitarget):
+            classerr = CustomNILMRegressionMetrics(num_classes=5)
+        else:
+            classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
         classerr = tnt.MSEMeter()
     batch_time = tnt.AverageValueMeter()
@@ -905,6 +922,8 @@ def train(train_loader, model, criterion, optimizer, epoch,
             for target_idx in range(len(target_temp[0])):
                 temp_list = [elem[target_idx].to(args.device) for elem in target_temp]
                 target = target + (temp_list, )
+        elif (args.nilm and args.multitarget):
+            inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target_temp]
         else:
             inputs, target = inputs.to(args.device), target_temp.to(args.device)
 
@@ -940,12 +959,16 @@ def train(train_loader, model, criterion, optimizer, epoch,
             if args.show_train_accuracy == 'full' or \
                 (args.show_train_accuracy == 'last_batch'
                     and train_step >= len(train_loader)-2):
+                if (args.nilm and args.multitarget):
+                    classerr.add(output.data, target)
                 if len(output.data.shape) <= 2 or args.regression:
                     classerr.add(output.data, target)
                 else:
                     classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0, end_dim=2),
                                  target.flatten())
-                if not args.regression:
+                if args.multitarget:
+                    acc_stats.append([classerr.value()["mse"]])
+                elif not args.regression:
                     acc_stats.append([classerr.value(1),
                                      classerr.value(min(args.num_classes, 5))])
                 else:
@@ -1002,7 +1025,13 @@ def train(train_loader, model, criterion, optimizer, epoch,
         if steps_completed % args.print_freq == 0 or steps_completed == steps_per_epoch:
             # Log some statistics
             errs = OrderedDict()
-            if not args.regression:
+            if (args.nilm and args.multitarget):
+                # if classerr.mse_meter.n != 0:
+                #     errs['MSE'] = classerr.value()["mse"]
+                # else:
+                #     errs['MSE'] = None
+                pass
+            elif not args.regression:
                 if classerr.n != 0:
                     errs['Top1'] = classerr.value(1)
                     if args.num_classes > 5:
@@ -1125,7 +1154,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
             iou_thresholds=[0.5],
         ).to(args.device)
         mAP = 0.00
-    if not args.regression:
+    if (args.nilm and args.multitarget):
+        classerr = CustomNILMRegressionMetrics(num_classes=5)
+    elif not args.regression:
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
         classerr = tnt.MSEMeter()
@@ -1232,6 +1263,22 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         # Update mAP calculator
                         map_calculator.update(preds=preds, target=gt)
                         have_mAP = True
+
+            elif (args.nilm and args.multitarget):
+                inputs, target = inputs.to(args.device), [elem.to(args.device) for elem in target_temp]
+                # compute output from model
+                output = model(inputs)
+                # correct output for accurate loss calculation
+                if args.act_mode_8bit:
+                    output /= 128.
+                    for key in model.__dict__['_modules'].keys():
+                        if (hasattr(model.__dict__['_modules'][key], 'wide')
+                                and model.__dict__['_modules'][key].wide):
+                            output /= 256.
+
+                    # RMS estimation is regression
+                    target[1] = target[1] / 128.
+
             else:
                 inputs, target = inputs.to(args.device), target_temp.to(args.device)
                 # compute output from model
@@ -1266,7 +1313,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
             losses[OBJECTIVE_LOSS_KEY].add(loss.item())
 
             if not args.obj_detection and not args.kd_relationbased:
-                if len(output.data.shape) <= 2 or args.regression:
+                if (args.nilm and args.multitarget):
+                    classerr.add(output.data, target)
+                elif len(output.data.shape) <= 2 or args.regression:
                     classerr.add(output.data, target)
                 else:
                     classerr.add(output.data.permute(0, 2, 3, 1).flatten(start_dim=0, end_dim=2),
@@ -1302,6 +1351,12 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                         '',
                         OrderedDict([('Loss', losses[OBJECTIVE_LOSS_KEY].mean),
                                      ('mAP', mAP)])
+                    )
+                elif (args.nilm and args.multitarget):
+                    stats = (
+                            '',
+                            OrderedDict([('Loss', losses[OBJECTIVE_LOSS_KEY].mean),])
+                                        # ('MSE', classerr.value()["mse"])])
                     )
                 elif args.regression:
                     stats = (
@@ -1364,18 +1419,29 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                        losses[OVERALL_LOSS_KEY].mean)
         return 0, 0, losses[OVERALL_LOSS_KEY].mean, 0
 
-    if args.regression:
+    if (args.nilm and args.multitarget):
+
+        msglogger.info('==> Regression Metrics per Appliance')
+        for key, value in classerr.value()["apps"].items():
+            msglogger.info(f"==> {key}:\t{' '.join([str(v) for v in value])}")
+
+        # msglogger.info('==> MSE: %.3f       Loss: %.3f\n',
+        #                     classerr.value()["mse"], losses[OBJECTIVE_LOSS_KEY].mean)
+        return classerr.value()["mse"], 0, losses[OBJECTIVE_LOSS_KEY].mean, 0
+
+    elif not args.regression:
+        if args.num_classes > 5:
+            msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
+                            classerr.value()[0], classerr.value()[1],
+                            losses[OBJECTIVE_LOSS_KEY].mean)
+        else:
+            msglogger.info('==> Top1: %.3f    Loss: %.3f\n',
+                            classerr.value()[0], losses[OBJECTIVE_LOSS_KEY].mean)
+    else:
         msglogger.info('==> MSE: %.5f    Loss: %.3f\n',
-                       classerr.value(), losses[OBJECTIVE_LOSS_KEY].mean)
+                        classerr.value(), losses[OBJECTIVE_LOSS_KEY].mean)
         return classerr.value(), .0, losses[OBJECTIVE_LOSS_KEY].mean, 0
 
-    if args.num_classes > 5:
-        msglogger.info('==> Top1: %.3f    Top5: %.3f    Loss: %.3f\n',
-                       classerr.value()[0], classerr.value()[1],
-                       losses[OBJECTIVE_LOSS_KEY].mean)
-    else:
-        msglogger.info('==> Top1: %.3f    Loss: %.3f\n',
-                       classerr.value()[0], losses[OBJECTIVE_LOSS_KEY].mean)
 
     if args.display_confusion:
         msglogger.info('==> Confusion:\n%s\n', str(confusion.value()))
@@ -1419,6 +1485,12 @@ def update_training_scores_history(perf_scores_history, model, top1, top5, mAP, 
                            'Params: %d on epoch: %d]',
                            score.mAP, -score.vloss, -score.params_nnz_cnt,
                            score.epoch)
+    elif (args.nilm and args.multitarget):
+        perf_scores_history.sort(key=operator.attrgetter('vloss', 'epoch'),
+                                     reverse=True)
+        for score in perf_scores_history[:args.num_best_scores]:
+            msglogger.info('==> Best [Overall Loss: %f on epoch: %d]',
+                           -score.vloss, score.epoch)
     elif args.regression:
         # Sort by MSE as main sort key, then sort by epoch
         perf_scores_history.sort(key=operator.attrgetter('epoch'), reverse=True)

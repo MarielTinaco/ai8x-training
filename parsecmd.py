@@ -214,5 +214,15 @@ def get_parser(model_names, dataset_names):
                                     help='path to YAML file that defines the '
                                     'parameters for Object Detection Loss and NMS')
 
+    nilm_args = parser.add_argument_group('NILM')
+    nilm_args.add_argument("--enable-nilm", "--nilm",
+                           dest='nilm', default=False,
+                           action='store_true',
+                           help='Enable when training NILM model')
+    nilm_args.add_argument("--multitarget",
+                           default=False,
+                           action='store_true')
+
+
     distiller.knowledge_distillation.add_distillation_args(parser, model_names, True)
     return parser
