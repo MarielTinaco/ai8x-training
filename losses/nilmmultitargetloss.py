@@ -42,7 +42,10 @@ class NILMMultiTargetLoss(torch.nn.Module):
                 ## States Loss
                 # Scaling the values of the output state to stay stabilize log softmax function
                 ls = self.logsoftmax(input_state * self.logsoftmax_scale_factor)
-                loss_nll = self.states_loss(ls, target_state)
+                if self.states_loss.weight:
+                        loss_nll = self.states_loss(ls, target_state, weight=self.states_loss.weight)
+                else:
+                        loss_nll = self.states_loss(ls, target_state)
 
                 ## Power Loss
                 # prob = prob.unsqueeze(1).expand_as(input_power)
