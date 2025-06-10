@@ -386,8 +386,8 @@ def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
     # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
-    TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2013, month=7, day=27)
-    TEST_TIMEFRAME = datetime(year=2014, month=4, day=27), datetime(year=2014, month=5, day=28)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
+    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
     (data_dir, args) = data
 
     seq_len = 100
