@@ -1271,10 +1271,9 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
                 # correct output for accurate loss calculation
                 if args.act_mode_8bit:
                     output /= 128.
-                    for key in model.__dict__['_modules'].keys():
-                        if (hasattr(model.__dict__['_modules'][key], 'wide')
-                                and model.__dict__['_modules'][key].wide):
-                            output /= 256.
+                    for _, module in model.named_modules():
+                        if hasattr(module, 'wide') and module.wide:
+                            output /= 128.
 
                     # RMS estimation is regression
                     target[1] = target[1] / 128.
