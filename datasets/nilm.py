@@ -225,6 +225,11 @@ class NILM(Dataset):
             return Sequence2PointWithStratifiedSampling(self.input_array,
                                   (self.states_array,self.rms_array),
                                   sequence_length = self.seq_len)
+        elif loading_scheme == "seq2point_stratified_on_input":
+            return Sequence2PointWithStratifiedSampling(self.input_array,
+                                  (self.states_array,self.rms_array),
+                                  sequence_length = self.seq_len,
+                                  basis_vector="input")
         else:
             raise ValueError("Invalid Loading Scheme")
 
@@ -390,10 +395,17 @@ class Sequence2PointWithStratifiedSampling:
     def __init__(self,
                  data: Union[np.ndarray, Iterable],
                  labels: Union[np.ndarray, Iterable],
-                 sequence_length : int):
+                 sequence_length : int,
+                 basis_vector=None):
 
-        stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length)
-        output_stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length) + sequence_length
+        self.basis_vector = basis_vector
+        if self.basis_vector == "input":
+            stride = lambda _: self.activity_determined_indices(data, sequence_length=sequence_length)
+            output_stride = lambda _: self.activity_determined_indices(data, sequence_length=sequence_length) + sequence_length
+        else:
+            stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length)
+            output_stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length) + sequence_length
+
         self.input_sampler = WindowSampler(data=data, length=sequence_length, axis=0, stride=stride)
         self.states_sampler = WindowSampler(data=labels[0], length=1, axis=0, stride= output_stride)
         self.rms_sampler = WindowSampler(data=labels[1], length=1, axis=0, stride= output_stride)
@@ -404,21 +416,22 @@ class Sequence2PointWithStratifiedSampling:
     def __getitem__(self, index):
         return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
 
-    @staticmethod
-    def activity_determined_indices(activation_states, sequence_length):
+    def activity_determined_indices(self, activation_states, sequence_length):
         """
 
         """
-        
-        # Aggregate activations states of each appliance for any given time to determing any activity
-        activity = np.apply_along_axis(lambda x: int(any(x)), 1, activation_states)
+        if self.basis_vector == "input":
+            activity = activation_states
+        else:
+            # Aggregate activations states of each appliance for any given time to determing any activity
+            activity = np.apply_along_axis(lambda x: int(any(x)), 1, activation_states)
 
         # Make sure there is only a single stream of data to determine activity
         assert len(activity.shape) == 1, "Aggregate activation state must be in 1 dimension to proceed"
 
         indices_with_detected_activity = set([])
         for idx, state in enumerate(activity):
-            if state:
+            if state > 0:
                 # Add an additional element to include full zero activation states
                 start_index = idx - (sequence_length + 1)
                 if start_index < 0:
@@ -431,6 +444,7 @@ class Sequence2PointWithStratifiedSampling:
                 index_active = np.arange(max(0, start_index), idx, 1)
                 indices_with_detected_activity.update(index_active)
         return np.sort(np.fromiter(indices_with_detected_activity, dtype=int))
+
 
 
 def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
@@ -572,6 +586,51 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
 
     return train_dataset, test_dataset
 
+def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
+
+    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
+    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
+    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
+    TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2013, month=7, day=27)
+    TEST_TIMEFRAME = datetime(year=2014, month=4, day=27), datetime(year=2014, month=5, day=28)
+    (data_dir, args) = data
+
+    seq_len = 100
+    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
+    #            "computer", "broadband_router", "charger"]
+    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    transform = transforms.Compose([ai8x.normalize(args=args)])
+
+    if load_train:
+        train_dataset = NILM(root=data_dir,
+                             filename=UKDALE_SOURCE,
+                             classes=classes,
+                             dtype="train",
+                             transform=transform,
+                             timeframe=TRAIN_TIMEFRAME,
+                             seq_len=seq_len,
+                             synth_input=True,
+                             denoise_input=True,
+                             loading_scheme="seq2point_stratified_on_input")
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = NILM(root=data_dir,
+                            filename=UKDALE_SOURCE,
+                            classes=classes,
+                            dtype="test",
+                            transform=transform,
+                            timeframe=TEST_TIMEFRAME,
+                            seq_len=seq_len,
+                            synth_input=True,
+                            denoise_input=True,
+                            loading_scheme="seq2point_stratified_on_input")
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
 
 
 
@@ -594,6 +653,14 @@ datasets = [
 	},
     	{
 		'name' : 'UKDALE_stratified',
+		'input' : (1, 100),
+		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
+		'output' : (21, 26, 44, 15, 30),
+		'weight' : (0.0625, 1),
+		'loader' : ukdale_seq2point_stratified_get_datasets,
+	},
+    {
+		'name' : 'UKDALE_stratified_on_input',
 		'input' : (1, 100),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
 		'output' : (21, 26, 44, 15, 30),
