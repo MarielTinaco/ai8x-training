@@ -29,14 +29,15 @@ class NILMMultiTargetLoss(torch.nn.Module):
         def forward(self, inputs, targets):
                 B = inputs.size(0)
 
+                # prob, pred = torch.max(self.softmax(input_state), 1)
+                inputs = torch.clip(inputs, min=-1)
+                inputs = (inputs + 1)/2
+
                 input_state = inputs[:,:2*self.num_classes].reshape(B, 2, -1)
                 input_power = inputs[:,2*self.num_classes:].reshape(B, len(self.quantiles), -1)
 
                 target_state = targets[0]
                 target_power = targets[1]
-
-                # prob, pred = torch.max(self.softmax(input_state), 1)
-                # input_power = torch.clip(input_power, min=-1, max=1)
 
                 ## States Loss
                 loss_nll = self.states_loss(self.logsoftmax(input_state), target_state)
