@@ -77,7 +77,7 @@ class AI85NILMSeq2Point(nn.Module):
 
         self.mlp1 = ai8x.FusedLinearReLU(252, 256, bias=bias, **kwargs)
 
-        self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, **kwargs)
+        self.fc_state = ai8x.Linear(256, num_classes*2, bias=bias, activation="Abs", **kwargs)
         self.fc_power = ai8x.Linear(256, num_classes*5, bias=bias, **kwargs)
 
         self.initWeights("kaiming")
