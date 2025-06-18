@@ -138,12 +138,14 @@ class CustomNILMRegressionMetrics:
 
         B = output.size(0)
 
+
         output_state = output[:,:2*5].reshape(B, 2, -1)
         output_power = output[:,2*5:].reshape(B, 5, -1)
 
         prob, pred_state = torch.max(self.softmax(output_state), 1)
-        pred_power = torch.clip(output_power, min=0.0, max=1.0)
-
+        pred_power = torch.clip(output_power, min=-1)
+        pred_power = (pred_power + 1) / 2
+        
         y = target[1]
         z = target[0]
 
@@ -163,7 +165,7 @@ class CustomNILMRegressionMetrics:
 
         for idx, app_data in enumerate(self.appliance_data):
             power[:,idx] = minmax_scale(power[:,idx], (app_data["min"], app_data["max"]))
-            pred_power[:,:,idx] = np.clip(pred_power[:,:,idx], -1, 1)
+            pred_power[:,:,idx] = np.clip(pred_power[:,:,idx], 0, 1)
             pred_power[:,:,idx] = minmax_scale(pred_power[:,:,idx], (app_data["min"], app_data["max"]))
 
         y_pred = pred_power[:,2]
