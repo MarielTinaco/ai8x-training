@@ -36,47 +36,32 @@ class AI85NILMSeq2Point128(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-        self.conv1_1 = ai8x.FusedConv1dBNReLU(num_channels, 128, 1, stride=1, padding=0,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv1 = ai8x.FusedConv1dBNReLU(num_channels, 32, 5, stride=1, padding=2,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv1_2 = ai8x.FusedConv1dBNReLU(128, 64, 3, stride=1, padding=1,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv2 = ai8x.FusedConv1dBNReLU(32, 64, 5, stride=1, padding=2,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv1_3 = ai8x.FusedConv1dBNReLU(64, 128, 3, stride=1, padding=1,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv3 = ai8x.FusedMaxPoolConv1dBNReLU(64, 64, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv2_1 = ai8x.FusedMaxPoolConv1dBNReLU(128, 128, 3, stride=1, padding=1,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv4 = ai8x.FusedMaxPoolConv1dBNReLU(64, 96, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv2_2 = ai8x.FusedConv1dBNReLU(128, 64, 1, stride=1, padding=0,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv5 = ai8x.FusedAvgPoolConv1dBNReLU(96, 128, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv2_3 = ai8x.FusedConv1dBNReLU(64, 128, 1, stride=1, padding=0,
-                bias=bias, batchnorm='NoAffine', **kwargs)
-        
-        self.conv3_1 = ai8x.FusedMaxPoolConv1dBNReLU(128, 128, 3, stride=1, padding=1,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv6 = ai8x.FusedMaxPoolConv1dBNReLU(128, 64, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv3_2 = ai8x.FusedConv1dBNReLU(128, 64, 5, stride=1, padding=2,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv7 = ai8x.FusedAvgPoolConv1dBNReLU(64, 128, 5, stride=1, padding=2,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv4_1 = ai8x.FusedMaxPoolConv1dBNReLU(64, 128, 5, stride=1, padding=2,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv8 = ai8x.FusedMaxPoolConv1dBNReLU(128, 64, 5, stride=1, padding=2,
+                bias=bias, batchnorm='Affine', **kwargs)
 
-        self.conv4_2 = ai8x.FusedConv1dBNReLU(128, 128, 1, stride=1, padding=0,
-                bias=bias, batchnorm='NoAffine', **kwargs)
-
-        self.conv5_1 = ai8x.FusedMaxPoolConv1dBNReLU(128, 128, 5, stride=1, padding=2,
-                bias=bias, batchnorm='NoAffine', **kwargs)
-
-        self.conv5_2 = ai8x.FusedConv1dBNReLU(128, 64, 3, stride=1, padding=1,
-                bias=bias, batchnorm='NoAffine', **kwargs)
-
-        self.conv6_1 = ai8x.FusedMaxPoolConv1dBNReLU(64, 64, 5, stride=1, padding=2,
-                bias=bias, batchnorm='NoAffine', **kwargs)
-
-        self.conv6_2 = ai8x.FusedConv1dBNReLU(64, 64, 1, stride=1, padding=0,
-                bias=bias, batchnorm='NoAffine', **kwargs)
+        self.conv9 = ai8x.FusedMaxPoolConv1dBNReLU(64, 256, 3, stride=1, padding=1,
+                bias=bias, batchnorm='Affine', **kwargs)
 
         self.mlp1 = ai8x.FusedLinearReLU(256, 256, bias=bias, **kwargs)
 
@@ -86,22 +71,19 @@ class AI85NILMSeq2Point128(nn.Module):
         self.initWeights("kaiming")
 
     def forward(self, x):
-        x = self.conv1_1(x)       # 128
-        x = self.conv1_2(x)       # 128
-        x = self.conv1_3(x)       # 128
-        x = self.conv2_1(x)       # 64
-        x = self.conv2_2(x)       # 64
-        x = self.conv2_3(x)       # 64
-        x = self.conv3_1(x)       # 32
-        x = self.conv3_2(x)       # 32
-        x = self.conv4_1(x)       # 16
-        x = self.conv4_2(x)       # 16
-        x = self.conv5_1(x)       # 8
-        x = self.conv5_2(x)       # 8
-        x = self.conv6_1(x)       # 4
-        x = self.conv6_2(x)       # 4
+        x = self.conv1(x)       # 128
+        x = self.conv2(x)       # 128
+        x = self.conv3(x)       # 64
+        x = self.conv4(x)       # 32
         x = self.dropout(x)
-        x = x.view(x.size(0), -1) # 256
+        x = self.conv5(x)       # 16
+        x = self.conv6(x)       # 8
+        x = self.dropout(x)
+        x = self.conv7(x)       # 4
+        x = self.conv8(x)       # 2
+        x = self.conv9(x)       # 1
+        x = self.dropout(x)
+        x = x.view(x.size(0), -1)
         x = self.mlp1(x)
         x1 = self.fc_state(x)
         x1 = x1.view(x1.size(0), -1)
