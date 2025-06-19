@@ -95,6 +95,7 @@ class NILM(Dataset):
         else:
             self.__gen_datasets()
 
+        self.rms_array = minmax_scale(self.rms_array)                       # post processing scaling
         self.loading_scheme = self.select_loading_scheme(loading_scheme)
 
     @property
@@ -178,11 +179,11 @@ class NILM(Dataset):
                 filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
 
                 # normalized_df = minmax_scale(filtered_df, feature_range=(0, APPLIANCE_GLOBAL_MAX[self.classes[idx]]))
-                normalized_df = minmax_scale(filtered_df)
+                # normalized_df = minmax_scale(filtered_df)
 
                 binarized_df = np.where(filtered_df >= on_power_threshold, 1, 0).astype(int)
 
-                rms_list.append(normalized_df)
+                rms_list.append(filtered_df)
                 states_list.append(binarized_df)
 
             # Synthesize input or use site meter from dataset
@@ -386,8 +387,8 @@ def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
     # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
-    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
-    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=3, day=26)
+    TEST_TIMEFRAME = datetime(year=2015, month=6, day=14), datetime(year=2015, month=6, day=15)
     (data_dir, args) = data
 
     seq_len = 100
