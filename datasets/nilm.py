@@ -113,8 +113,8 @@ class NILM(Dataset):
     def __getitem__(self, index):
         inputs, targets = self.loading_scheme.__getitem__(index)
 
-        power = targets[0]
-        state = targets[1]
+        state = targets[0]
+        power = targets[1]
 
         # reshape to 2D
         inputs = torch.tensor(inputs)
