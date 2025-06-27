@@ -479,7 +479,7 @@ datasets = [
 		'input' : (1, 100),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
 		'output' : (21, 26, 44, 15, 30),
-		'weights' : (1, 1),
+		'weight' : (0.00625, 1),
 		'loader' : ukdale_seq2point_get_datasets,
 	},
     {
@@ -487,7 +487,7 @@ datasets = [
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
 		'output' : (21, 26, 44, 15, 30),
-		'weights' : (1, 1),
+		'weight' : (0.00625, 1),
 		'loader' : ukdale_128_seq2point_get_datasets,
 	}
 ]

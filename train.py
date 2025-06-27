@@ -112,7 +112,7 @@ import sample
 import yamlwriter
 from losses.dummyloss import DummyLoss
 from losses.multiboxloss import MultiBoxLoss
-from losses.nilmmultitargetloss import NILMMultiTargetLoss
+from losses.nilmmultitargetloss import CustomNILMLoss
 from metrics.nilm import CustomNILMRegressionMetrics
 from nas import parse_nas_yaml
 from utils import kd_relationbased, model_wrapper, object_detection_utils, parse_obj_detection_yaml
@@ -431,13 +431,10 @@ def main():
                                  ['neg_pos_ratio'], device=args.device).to(args.device)
     elif (args.nilm and args.multitarget):
         if 'weight' in selected_source:
-            nll_criterion = nn.NLLLoss(
-                torch.tensor(selected_source['weight'], dtype=torch.float)
-            ).to(args.device)
+            criterion = CustomNILMLoss(torch.tensor(selected_source['weight'], dtype=torch.float)).to(args.device)
         else:
-            nll_criterion = nn.NLLLoss().to(args.device)
+            criterion = CustomNILMLoss().to(args.device)
 
-        criterion = NILMMultiTargetLoss(nll_criterion, num_classes=args.num_classes)
     elif args.dr:
         criterion = pml_losses.SubCenterArcFaceLoss(num_classes=args.num_classes,
                                                     embedding_size=args.dr,
