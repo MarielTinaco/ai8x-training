@@ -633,6 +633,53 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
     return train_dataset, test_dataset
 
 
+def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
+
+    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
+    AUG_UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426_aug.h5"
+    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
+    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
+    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
+    (data_dir, args) = data
+
+    seq_len = 128
+    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
+    #            "computer", "broadband_router", "charger"]
+    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    transform = transforms.Compose([ai8x.normalize(args=args)])
+
+    if load_train:
+        train_dataset = NILM(root=data_dir,
+                             filename=AUG_UKDALE_SOURCE,
+                             classes=classes,
+                             dtype="train",
+                             transform=transform,
+                             timeframe=TRAIN_TIMEFRAME,
+                             seq_len=seq_len,
+                             synth_input=True,
+                             denoise_input=True,
+                             loading_scheme="seq2point_stratified_on_input")
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = NILM(root=data_dir,
+                            filename=AUG_UKDALE_SOURCE,
+                            classes=classes,
+                            dtype="test",
+                            transform=transform,
+                            timeframe=TEST_TIMEFRAME,
+                            seq_len=seq_len,
+                            synth_input=True,
+                            denoise_input=True,
+                            loading_scheme="seq2point")
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
+
 
 datasets = [
 	{
@@ -666,39 +713,13 @@ datasets = [
 		'output' : (21, 26, 44, 15, 30),
 		'weight' : (0.0625, 1),
 		'loader' : ukdale_seq2point_stratified_get_datasets,
+	},
+    {
+		'name' : 'UKDALE_128_stratified',
+		'input' : (1, 128),
+		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
+		'output' : (21, 26, 44, 15, 30),
+		'weight' : (1, 1),
+		'loader' : ukdale_128_seq2point_stratified_get_datasets,
 	}
 ]
-
-# if __name__ == "__main__":
-#     device = "cpu"
-#     #CHANGE ME: Change below path to folder that contains or will contain dataset
-#     #           (Data loader will create and use PascalVOC folder ubder this main root folder)
-#     #           Below is an example where a path under Ubuntu root folder ('/'): /data2/ml/ 
-#     #           is used for data files'
-#     data_path = "data"
-
-#     class Args:
-#         def __init__(self, act_mode_8bit):
-#             self.act_mode_8bit = act_mode_8bit
-#             self.truncate_testset = False
-
-#     simulate = False
-#     args = Args(act_mode_8bit=simulate)
-#     transform = transforms.Compose([ai8x.normalize(args=args)])
-#     # classes = ["fridge_freezer", "kettle"]
-#     classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
-#     TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2013, month=6, day=27)
-#     TEST_TIMEFRAME = datetime(year=2014, month=5, day=27), datetime(year=2014, month=6, day=28)
-
-#     dataset = NILM(root=data_path,
-#                    filename="ukdale_bldg1_20121109_20170426.h5",
-#                    dtype="train",
-#                    classes=classes,
-#                    transform=transform,
-#                    timeframe=TRAIN_TIMEFRAME,
-#                    seq_len=100,
-#                    synth_input=True,
-#                    denoise_input=True,
-#                    loading_scheme="seq2point")
-    
-#     print(dataset[0])
