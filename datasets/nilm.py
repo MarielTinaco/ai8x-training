@@ -36,11 +36,11 @@ import ai8x
 SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
-    "fridge_freezer" : 50,
-    "kettle" : 50,
-    "washer_dryer" : 50,
-    "dish_washer" : 50,
-    "microwave" : 50
+    "fridge_freezer" : 64,
+    "kettle" : 64,
+    "washer_dryer" : 64,
+    "dish_washer" : 16,
+    "microwave" : 64
 }
 
 APPLIANCE_GLOBAL_MAX = {
@@ -174,10 +174,7 @@ class NILM(Dataset):
 
                 app_collection.append(app_df)
 
-                if self.classes[idx] == "kettle":
-                    filtered_df = app_df
-                else:
-                    filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=QUANTILE_FILTER_WINDOW[self.classes[idx]])
+                filtered_df = NILM.quantile_filter(app_df, QUANTILE_FILTER_WINDOW[self.classes[idx]], p=50)
                 # filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
 
                 # normalized_df = minmax_scale(filtered_df, feature_range=(0, APPLIANCE_GLOBAL_MAX[self.classes[idx]]))
