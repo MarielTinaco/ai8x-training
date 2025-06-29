@@ -33,13 +33,13 @@ import pandas as pd
 import ai8x
 
 
-SITEMETER_KEY = "/site_meter/instance_None"
+SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
     "fridge_freezer" : 50,
     "kettle" : 50,
     "washer_dryer" : 50,
-    "dish_washer" : 10,
+    "dish_washer" : 50,
     "microwave" : 50
 }
 
@@ -174,8 +174,11 @@ class NILM(Dataset):
 
                 app_collection.append(app_df)
 
-                # filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=QUANTILE_FILTER_WINDOW[self.classes[idx]])
-                filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
+                if self.classes[idx] == "kettle":
+                    filtered_df = app_df
+                else:
+                    filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=QUANTILE_FILTER_WINDOW[self.classes[idx]])
+                # filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
 
                 # normalized_df = minmax_scale(filtered_df, feature_range=(0, APPLIANCE_GLOBAL_MAX[self.classes[idx]]))
                 normalized_df = minmax_scale(filtered_df)
@@ -495,7 +498,7 @@ def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
 
 def ukdale_128_seq2point_get_datasets(data, load_train=True, load_test=True):
 
-    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
+    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426_aug.h5"
     # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
     # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
