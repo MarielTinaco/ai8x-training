@@ -51,7 +51,6 @@ APPLIANCE_GLOBAL_MAX = {
     "microwave" : 1605.0
 }
 
-
 class NILM(Dataset):
 
     class_dict = {'_noise_': 0, 'active_subwoofer': 1, 'audio_amplifier': 2, 'audio_system': 3, 'baby_monitor': 4, 'boiler': 5,
@@ -111,24 +110,10 @@ class NILM(Dataset):
         return len(self.loading_scheme)
 
     def __getitem__(self, index):
-        inputs, targets = self.loading_scheme.__getitem__(index)
+        return self.loading_scheme.__getitem__(index)
 
-        state = targets[0]
-        power = targets[1]
-
-        # reshape to 2D
-        inputs = torch.tensor(inputs)
-        inp = self.__reshape_audio(inputs, row_len=self.seq_len)
-        inp = inp.type(torch.FloatTensor)
-
-        power_ = torch.tensor(power)
-        power_ = power_.type(torch.FloatTensor)
-        power_ = power_.squeeze()
-
-        return self.transform(inp), \
-			(torch.tensor(state).long().squeeze(), self.transform(power_))
-
-    def __reshape_audio(self, audio, row_len=128):
+    @staticmethod
+    def __reshape_audio(audio, row_len=128):
         # add overlap if necessary later on
         # return torch.transpose(audio.reshape((-1, row_len)), 1, 0)
         return audio.reshape((-1, row_len))
@@ -220,15 +205,18 @@ class NILM(Dataset):
             return Sequence2Point(self.input_array,
                                   (self.states_array,self.rms_array),
                                   sequence_length = self.seq_len,
-                                  stride=1)
+                                  stride=1,
+                                  transform=self.transform)
         elif loading_scheme == "seq2point_stratified":
             return Sequence2PointWithStratifiedSampling(self.input_array,
                                   (self.states_array,self.rms_array),
-                                  sequence_length = self.seq_len)
+                                  sequence_length = self.seq_len,
+                                  transform=self.transform)
         elif loading_scheme == "seq2point_stratified_on_input":
             return Sequence2PointWithStratifiedSampling(self.input_array,
                                   (self.states_array,self.rms_array),
                                   sequence_length = self.seq_len,
+                                  transform=self.transform,                                  
                                   basis_vector="input")
         else:
             raise ValueError("Invalid Loading Scheme")
@@ -315,7 +303,10 @@ class NILM(Dataset):
 
 
 class WindowSampler:
-    def __init__(self, data : np.ndarray, stride : Optional[Union[int, np.ndarray, Callable]] = None,  *args, **kwargs):
+
+    def __init__(self, data : np.ndarray,
+                 stride : Optional[Union[int, np.ndarray, Callable]] = None, 
+                 *args, **kwargs):
         """
         
         Parameters
@@ -368,6 +359,13 @@ class WindowSampler:
     def axis(self):
         return self._axis
 
+
+# # # # # # # # # # # # # # # # # # # # # # #
+#                                           #
+#           DATA LOADING SCHEMES            #
+#                                           #
+# # # # # # # # # # # # # # # # # # # # # # #
+
 class Sequence2Point(Sequence):
     """
     Implements Sequence Protocol
@@ -376,18 +374,38 @@ class Sequence2Point(Sequence):
                  data: Union[np.ndarray, Iterable],
                  labels: Union[np.ndarray, Iterable],
                  sequence_length : int,
-                 stride = 1):
+                 stride = 1,
+                 transform = None):
 
+        self.seq_len = sequence_length
         output_stride = lambda x: np.arange(sequence_length-1, labels[0].shape[0], stride)
         self.input_sampler = WindowSampler(data=data, length=sequence_length, axis=0, stride=stride)
         self.states_sampler = WindowSampler(data=labels[0], length=1, axis=0, stride= output_stride)
         self.rms_sampler = WindowSampler(data=labels[1], length=1, axis=0, stride= output_stride)
+        self.transform = transform
 
     def __len__(self):
         return len(self.input_sampler)
 
     def __getitem__(self, index):
-        return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
+        if self.transform is None:
+            return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
+
+        inputs = self.input_sampler[index]
+        state = self.states_sampler[index]
+        power = self.rms_sampler[index]
+
+        # reshape to 2D
+        inputs = torch.tensor(inputs)
+        inp = inputs.reshape((-1, self.seq_len))
+        inp = inp.type(torch.FloatTensor)
+
+        power_ = torch.tensor(power)
+        power_ = power_.type(torch.FloatTensor)
+        power_ = power_.squeeze()
+
+        return self.transform(inp), \
+			(torch.tensor(state).long().squeeze(), self.transform(power_))
 
 
 class Sequence2PointWithStratifiedSampling:
@@ -396,8 +414,11 @@ class Sequence2PointWithStratifiedSampling:
                  data: Union[np.ndarray, Iterable],
                  labels: Union[np.ndarray, Iterable],
                  sequence_length : int,
+                 transform=None,
                  basis_vector=None):
 
+        self.seq_len = sequence_length
+        self.transform = transform
         self.basis_vector = basis_vector
         if self.basis_vector == "input":
             stride = lambda _: self.activity_determined_indices(data, sequence_length=sequence_length)
@@ -414,7 +435,24 @@ class Sequence2PointWithStratifiedSampling:
         return len(self.input_sampler)
 
     def __getitem__(self, index):
-        return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
+        if self.transform is None:
+            return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
+
+        inputs = self.input_sampler[index]
+        state = self.states_sampler[index]
+        power = self.rms_sampler[index]
+
+        # reshape to 2D
+        inputs = torch.tensor(inputs)
+        inp = inputs.reshape((-1, self.seq_len))
+        inp = inp.type(torch.FloatTensor)
+
+        power_ = torch.tensor(power)
+        power_ = power_.type(torch.FloatTensor)
+        power_ = power_.squeeze()
+
+        return self.transform(inp), \
+			(torch.tensor(state).long().squeeze(), self.transform(power_))
 
     def activity_determined_indices(self, activation_states, sequence_length):
         """
@@ -446,12 +484,15 @@ class Sequence2PointWithStratifiedSampling:
         return np.sort(np.fromiter(indices_with_detected_activity, dtype=int))
 
 
+# # # # # # # # # # # # # # # # # # # # #
+#                                       #
+#           DATASET GETTERS             #
+#                                       #
+# # # # # # # # # # # # # # # # # # # # #
 
 def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
-    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
     (data_dir, args) = data
@@ -496,8 +537,6 @@ def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
 def ukdale_128_seq2point_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426_aug.h5"
-    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
-    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
     (data_dir, args) = data
@@ -543,8 +582,6 @@ def ukdale_128_seq2point_get_datasets(data, load_train=True, load_test=True):
 def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
-    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2013, month=7, day=27)
     TEST_TIMEFRAME = datetime(year=2014, month=4, day=27), datetime(year=2014, month=5, day=28)
     (data_dir, args) = data
@@ -589,8 +626,6 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
 def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
-    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2013, month=7, day=27)
     TEST_TIMEFRAME = datetime(year=2014, month=4, day=27), datetime(year=2014, month=5, day=28)
     (data_dir, args) = data
@@ -637,8 +672,6 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     AUG_UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426_aug.h5"
-    # TRAIN_TIMEFRAME = datetime(year=2013, month=3, day=25), datetime(year=2014, month=3, day=27)
-    # TEST_TIMEFRAME = datetime(year=2014, month=3, day=27), datetime(year=2014, month=6, day=28)
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=6, day=15)
     (data_dir, args) = data
