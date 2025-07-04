@@ -37,7 +37,7 @@ SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
     "fridge_freezer" : 64,
-    "kettle" : 16,
+    "kettle" : 1,
     "washer_dryer" : 64,
     "dish_washer" : 16,
     "microwave" : 64
