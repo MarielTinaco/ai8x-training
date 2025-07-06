@@ -192,6 +192,8 @@ class NILM(Dataset):
             else:
                 mains = minmax_scale(mains)
 
+            mains = NILM.mu_law_compand(mains)
+
             self.input_array = mains
             self.rms_array = np.vstack(rms_list).T
             self.states_array = np.vstack(states_list).T
@@ -246,6 +248,10 @@ class NILM(Dataset):
     def quantile_filter(signal, sequence_length, p=50):
         new_signal = list(NILM.scan(np.array(signal), window_len=sequence_length))
         return np.percentile(new_signal, p, axis=1, method="nearest")
+
+    @staticmethod
+    def mu_law_compand(x, mu=255):
+        return np.sign(x) * np.log1p(mu * np.abs(x)) / np.log1p(mu)
 
     @staticmethod
     def extract_available_appliances(store: pd.HDFStore):
