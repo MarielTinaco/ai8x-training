@@ -254,6 +254,10 @@ class NILM(Dataset):
         return np.sign(x) * np.log1p(mu * np.abs(x)) / np.log1p(mu)
 
     @staticmethod
+    def mu_law_expand(y, mu=255):
+        return np.sign(y) * (1 / mu) * (np.expm1(np.abs(y) * np.log1p(mu)))
+
+    @staticmethod
     def extract_available_appliances(store: pd.HDFStore):
         all_keys = store.keys()
         all_keys = (i.split("/")[1] for i in all_keys)
