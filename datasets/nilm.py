@@ -37,10 +37,10 @@ SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
     "fridge_freezer" : 64,
-    "kettle" : 1,
+    "kettle" : 32,
     "washer_dryer" : 64,
     "dish_washer" : 16,
-    "microwave" : 64
+    "microwave" : 32
 }
 
 APPLIANCE_GLOBAL_MAX = {
@@ -183,7 +183,7 @@ class NILM(Dataset):
             else:
                 mains = input_array - np.percentile(input_array, 1)
                 mains = np.where(mains < input_array, input_array, mains)
-                mains = NILM.quantile_filter(mains, sequence_length=10, p=50)
+                mains = NILM.quantile_filter(mains, sequence_length=16, p=50)
 
             mains = minmax_scale(mains)
 
@@ -718,7 +718,7 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
     AUG_UKDALE_SOURCE = "ukdale_bldg1_20140320_20150630_aug.h5"
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
-    TEST_TIMEFRAME = datetime(year=2015, month=3, day=27), datetime(year=2015, month=6, day=15)
+    TEST_TIMEFRAME = datetime(year=2015, month=2, day=27), datetime(year=2015, month=5, day=15)
     (data_dir, args) = data
 
     seq_len = 128
@@ -737,21 +737,21 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
                              timeframe=TRAIN_TIMEFRAME,
                              seq_len=seq_len,
                              synth_input=True,
-                             denoise_input=True,
+                             denoise_input=False,
                              loading_scheme="seq2point_stratified_on_input")
     else:
         train_dataset = None
 
     if load_test:
         test_dataset = NILM(root=data_dir,
-                            filename=UKDALE_SOURCE,
+                            filename=AUG_UKDALE_SOURCE,
                             classes=classes,
                             dtype="test",
                             transform=transform,
                             timeframe=TEST_TIMEFRAME,
                             seq_len=seq_len,
                             synth_input=True,
-                            denoise_input=True,
+                            denoise_input=False,
                             loading_scheme="seq2point")
     else:
         test_dataset = None
