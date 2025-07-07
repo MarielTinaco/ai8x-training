@@ -64,7 +64,7 @@ class NILM(Dataset):
                   'USB_hub': 42, 'vacuum_cleaner': 43, 'washer_dryer': 44, 'water_pump': 45, 'wireless_phone_charger': 46}
 
     def __init__(self, root, filename, dtype, timeframe: tuple, classes,
-                 transform=None, seq_len=100, synth_input=False, denoise_input=True, maximum_value=None,
+                 transform=None, seq_len=100, synth_input=False, denoise_input=True, maximum_value=None, compand_input=False,
                  loading_scheme="seq2point"):
 
         if dtype not in ('test', 'train'):
@@ -80,6 +80,7 @@ class NILM(Dataset):
         self.synth_input = synth_input
         self.denoise_input = denoise_input
         self.maximum_value = maximum_value
+        self.compand_input = compand_input
 
         self.__makedir_exist_ok(self.processed_folder)
 
@@ -192,7 +193,8 @@ class NILM(Dataset):
             else:
                 mains = minmax_scale(mains)
 
-            mains = NILM.mu_law_compand(mains)
+            if self.compand_input:
+                mains = NILM.mu_law_compand(mains)
 
             self.input_array = mains
             self.rms_array = np.vstack(rms_list).T
@@ -734,6 +736,7 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
+    MAXIMUM_VALUE = 4500
     (data_dir, args) = data
 
     seq_len = 128
@@ -753,7 +756,7 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
                              seq_len=seq_len,
                              synth_input=True,
                              denoise_input=False,
-                             maximum_value=4500,
+                             maximum_value=MAXIMUM_VALUE,
                              loading_scheme="seq2point_stratified_on_input")
     else:
         train_dataset = None
@@ -768,7 +771,7 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
                             seq_len=seq_len,
                             synth_input=True,
                             denoise_input=False,
-                            maximum_value=4500,
+                            maximum_value=MAXIMUM_VALUE,
                             loading_scheme="seq2point")
     else:
         test_dataset = None
@@ -802,7 +805,8 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
                              seq_len=seq_len,
                              synth_input=True,
                              denoise_input=False,
-                             maximum_value=4500,
+                             maximum_value=MAXIMUM_VALUE,
+                             compand_input=True,
                              loading_scheme="seq2point_stratified_on_input")
     else:
         train_dataset = None
@@ -817,12 +821,62 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
                             seq_len=seq_len,
                             synth_input=True,
                             denoise_input=False,
+                            maximum_value=MAXIMUM_VALUE,
+                            compand_input=True,
                             loading_scheme="seq2point")
     else:
         test_dataset = None
 
     return train_dataset, test_dataset
 
+def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, load_test=True):
+
+    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
+    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
+    MAXIMUM_VALUE = 4500
+    (data_dir, args) = data
+
+    seq_len = 128
+    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
+    #            "computer", "broadband_router", "charger"]
+    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    transform = transforms.Compose([ai8x.normalize(args=args)])
+
+    if load_train:
+        train_dataset = NILM(root=data_dir,
+                             filename=UKDALE_SOURCE,
+                             classes=classes,
+                             dtype="train",
+                             transform=transform,
+                             timeframe=TRAIN_TIMEFRAME,
+                             seq_len=seq_len,
+                             synth_input=True,
+                             denoise_input=False,
+                             maximum_value=MAXIMUM_VALUE,
+                             compand_input=True,
+                             loading_scheme="seq2point_stratified_on_input")
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = NILM(root=data_dir,
+                            filename=UKDALE_SOURCE,
+                            classes=classes,
+                            dtype="test",
+                            transform=transform,
+                            timeframe=TEST_TIMEFRAME,
+                            seq_len=seq_len,
+                            synth_input=True,
+                            denoise_input=False,
+                            maximum_value=MAXIMUM_VALUE,
+                            compand_input=True,
+                            loading_scheme="seq2point")
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
 
 datasets = [
 	{
@@ -880,5 +934,13 @@ datasets = [
 		'output' : (21, 26, 44, 15, 30),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_crossval_get_datasets,
+	},
+    {
+		'name' : 'UKDALE_128_stratified_compand',
+		'input' : (1, 128),
+		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
+		'output' : (21, 26, 44, 15, 30),
+		'weight' : (1, 1),
+		'loader' : ukdale_128_seq2point_stratified_compand_get_datasets,
 	}
 ]
