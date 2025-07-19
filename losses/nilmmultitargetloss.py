@@ -58,7 +58,7 @@ class NILMMultiTargetLoss(torch.nn.Module):
 
 class CustomNILMLoss(torch.nn.Module):
 
-        def __init__(self, weight=None, quantiles=[0.0025,0.1, 0.5, 0.9, 0.975], num_classes=5):
+        def __init__(self, weight=None, quantiles=[0.0025,0.1, 0.5, 0.9, 0.975], num_classes=5, logsoftmax_scale_factor=5):
                 super().__init__()
 
                 self.num_classes = num_classes
@@ -67,6 +67,7 @@ class CustomNILMLoss(torch.nn.Module):
                 self.states_loss = torch.nn.NLLLoss(weight=weight)
                 self.rmse_loss = QuantileLoss(quantiles=quantiles)
 
+                self.logsoftmax_scale_factor = logsoftmax_scale_factor
 
         def forward(self, inputs, targets):
                 B = inputs.size(0)
@@ -77,12 +78,10 @@ class CustomNILMLoss(torch.nn.Module):
                 target_state = targets[0]
                 target_power = targets[1]
 
-                # prob, pred = torch.max(self.softmax(input_state), 1)
-                # input_power = torch.clip(input_power, min=-1, max=1)
-
                 ## States Loss
-                # if self.states_loss.weight:
-                loss_nll = self.states_loss(self.logsoftmax(input_state), target_state)
+                # Scaling the values of the output state to stay stabilize log softmax function
+                ls = self.logsoftmax(input_state * self.logsoftmax_scale_factor)
+                loss_nll = self.states_loss(ls, target_state)
 
                 ## Power Loss
                 # prob = prob.unsqueeze(1).expand_as(input_power)
