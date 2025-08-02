@@ -37,10 +37,10 @@ SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
     "fridge_freezer" : 64,
-    "kettle" : 16,
+    "kettle" : 32,
     "washer_dryer" : 64,
     "dish_washer" : 16,
-    "microwave" : 64
+    "microwave" : 32
 }
 
 APPLIANCE_GLOBAL_MAX = {
@@ -64,7 +64,7 @@ class NILM(Dataset):
                   'USB_hub': 42, 'vacuum_cleaner': 43, 'washer_dryer': 44, 'water_pump': 45, 'wireless_phone_charger': 46}
 
     def __init__(self, root, filename, dtype, timeframe: tuple, classes,
-                 transform=None, seq_len=100, synth_input=False, denoise_input=True,
+                 transform=None, seq_len=100, synth_input=False, denoise_input=True, maximum_value=None,
                  loading_scheme="seq2point"):
 
         if dtype not in ('test', 'train'):
@@ -79,6 +79,7 @@ class NILM(Dataset):
         self.seq_len = seq_len
         self.synth_input = synth_input
         self.denoise_input = denoise_input
+        self.maximum_value = maximum_value
 
         self.__makedir_exist_ok(self.processed_folder)
 
@@ -183,9 +184,13 @@ class NILM(Dataset):
             else:
                 mains = input_array - np.percentile(input_array, 1)
                 mains = np.where(mains < input_array, input_array, mains)
-                mains = NILM.quantile_filter(mains, sequence_length=10, p=50)
+                mains = NILM.quantile_filter(mains, sequence_length=16, p=50)
 
-            mains = minmax_scale(mains)
+            if self.maximum_value:
+                mains = np.clip(mains, a_min=0, a_max=self.maximum_value)
+                mains = minmax_scale(mains, feature_range=(0, self.maximum_value))
+            else:
+                mains = minmax_scale(mains)
 
             self.input_array = mains
             self.rms_array = np.vstack(rms_list).T
@@ -668,7 +673,7 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
     return train_dataset, test_dataset
 
 
-def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
+def ukdale_128_seq2point_aug_stratified_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     AUG_UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426_aug.h5"
@@ -713,12 +718,12 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
 
     return train_dataset, test_dataset
 
-def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True, load_test=True):
 
-    AUG_UKDALE_SOURCE = "ukdale_bldg1_20140320_20150630_aug.h5"
+def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_test=True):
+
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
     TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
-    TEST_TIMEFRAME = datetime(year=2015, month=3, day=27), datetime(year=2015, month=6, day=15)
+    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
     (data_dir, args) = data
 
     seq_len = 128
@@ -730,14 +735,15 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
 
     if load_train:
         train_dataset = NILM(root=data_dir,
-                             filename=AUG_UKDALE_SOURCE,
+                             filename=UKDALE_SOURCE,
                              classes=classes,
                              dtype="train",
                              transform=transform,
                              timeframe=TRAIN_TIMEFRAME,
                              seq_len=seq_len,
                              synth_input=True,
-                             denoise_input=True,
+                             denoise_input=False,
+                             maximum_value=4500,
                              loading_scheme="seq2point_stratified_on_input")
     else:
         train_dataset = None
@@ -751,13 +757,61 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
                             timeframe=TEST_TIMEFRAME,
                             seq_len=seq_len,
                             synth_input=True,
-                            denoise_input=True,
+                            denoise_input=False,
+                            maximum_value=4500,
                             loading_scheme="seq2point")
     else:
         test_dataset = None
 
     return train_dataset, test_dataset
 
+
+def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True, load_test=True):
+
+    AUG_UKDALE_SOURCE = "ukdale_bldg1_20140320_20150630_aug.h5"
+    UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
+    TEST_TIMEFRAME = datetime(year=2015, month=2, day=27), datetime(year=2015, month=5, day=15)
+    MAXIMUM_VALUE = 4500
+    (data_dir, args) = data
+
+    seq_len = 128
+    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
+    #            "computer", "broadband_router", "charger"]
+    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    transform = transforms.Compose([ai8x.normalize(args=args)])
+
+    if load_train:
+        train_dataset = NILM(root=data_dir,
+                             filename=UKDALE_SOURCE,
+                             classes=classes,
+                             dtype="train",
+                             transform=transform,
+                             timeframe=TRAIN_TIMEFRAME,
+                             seq_len=seq_len,
+                             synth_input=True,
+                             denoise_input=False,
+                             maximum_value=4500,
+                             loading_scheme="seq2point_stratified_on_input")
+    else:
+        train_dataset = None
+
+    if load_test:
+        test_dataset = NILM(root=data_dir,
+                            filename=UKDALE_SOURCE,
+                            classes=classes,
+                            dtype="test",
+                            transform=transform,
+                            timeframe=TEST_TIMEFRAME,
+                            seq_len=seq_len,
+                            synth_input=True,
+                            denoise_input=False,
+                            loading_scheme="seq2point")
+    else:
+        test_dataset = None
+
+    return train_dataset, test_dataset
 
 
 datasets = [
@@ -800,6 +854,14 @@ datasets = [
 		'output' : (21, 26, 44, 15, 30),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_get_datasets,
+	},
+    {
+		'name' : 'UKDALE_128_stratified_aug',
+		'input' : (1, 128),
+		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
+		'output' : (21, 26, 44, 15, 30),
+		'weight' : (1, 1),
+		'loader' : ukdale_128_seq2point_aug_stratified_get_datasets,
 	},
     {
 		'name' : 'UKDALE_128_stratified_crossval',
