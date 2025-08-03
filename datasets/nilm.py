@@ -8,40 +8,43 @@
 ###################################################################################################
 """
 """
-import os
+import os, sys
 import contextlib
-from datetime import datetime
 from pathlib import Path
+from datetime import datetime
+from functools import partial
+from collections import namedtuple
 from typing import Union, Iterable, Optional, Callable, Sequence
-from sklearn.preprocessing import minmax_scale
-from tqdm import tqdm
 
-import numpy as np
 import torch
-from torch.utils.data import Dataset
+import numpy as np
+import polars as pl
+from tqdm import tqdm
 from torchvision import transforms
+from torch.utils.data import Dataset
+from sklearn.preprocessing import minmax_scale
 
 import pandas as pd
 
 import ai8x
-from utils.nilm_utils import Sequence2Point, APPLIANCE_GLOBAL_DATA
+from utils.nilm_utils import Sequence2Point, FixedRangeScaler, APPLIANCE_GLOBAL_DATA, chunked_numpy_processing
 
 
 SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
-    "fridge_freezer" : APPLIANCE_GLOBAL_DATA[0]["filter_window"],
+    "fridge freezer" : APPLIANCE_GLOBAL_DATA[0]["filter_window"],
     "kettle" : APPLIANCE_GLOBAL_DATA[1]["filter_window"],
-    "washer_dryer" : APPLIANCE_GLOBAL_DATA[2]["filter_window"],
-    "dish_washer" : APPLIANCE_GLOBAL_DATA[3]["filter_window"],
+    "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["filter_window"],
+    "dish washer" : APPLIANCE_GLOBAL_DATA[3]["filter_window"],
     "microwave" : APPLIANCE_GLOBAL_DATA[4]["filter_window"]
 }
 
 APPLIANCE_GLOBAL_MAX = {
-    "fridge_freezer" : APPLIANCE_GLOBAL_DATA[0]["max"],
+    "fridge freezer" : APPLIANCE_GLOBAL_DATA[0]["max"],
     "kettle" : APPLIANCE_GLOBAL_DATA[1]["max"],
-    "washer_dryer" : APPLIANCE_GLOBAL_DATA[2]["max"],
-    "dish_washer" : APPLIANCE_GLOBAL_DATA[3]["max"],
+    "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["max"],
+    "dish washer" : APPLIANCE_GLOBAL_DATA[3]["max"],
     "microwave" : APPLIANCE_GLOBAL_DATA[4]["max"]
 }
 
@@ -49,15 +52,15 @@ class NILM(Dataset):
 
     class_dict = {'_noise_': 0, 'active_subwoofer': 1, 'audio_amplifier': 2, 'audio_system': 3, 'baby_monitor': 4, 'boiler': 5,
                   'bouncy_castle_pump': 6, 'breadmaker': 7, 'broadband_router': 8, 'charger': 9, 'clothes_iron': 10,
-                  'coffee_maker': 11, 'computer': 12, 'computer_monitor': 13, 'desktop_computer': 14, 'dish_washer': 15,
+                  'coffee_maker': 11, 'computer': 12, 'computer_monitor': 13, 'desktop_computer': 14, 'dish washer': 15,
                   'drill': 16, 'ethernet_switch': 17, 'external_hard_disk': 18, 'fan': 19, 'food_processor': 20,
-                  'fridge_freezer': 21, 'hair_dryer': 22, 'hair_straighteners': 23, 'HTPC': 24, 'immersion_heater': 25,
+                  'fridge freezer': 21, 'hair_dryer': 22, 'hair_straighteners': 23, 'HTPC': 24, 'immersion_heater': 25,
                   'kettle': 26, 'kitchen_aid': 27, 'laptop_computer': 28, 'light': 29, 'microwave': 30, 'mobile_phone_charger': 31,
                   'oven': 32, 'printer': 33, 'radio': 34, 'security_alarm': 35, 'solar_thermal_pumping_station': 36,
                   'soldering_iron': 37, 'tablet_computer_charger': 38, 'television': 39, 'toasted_sandwich_maker': 40, 'toaster': 41,
-                  'USB_hub': 42, 'vacuum_cleaner': 43, 'washer_dryer': 44, 'water_pump': 45, 'wireless_phone_charger': 46}
+                  'USB_hub': 42, 'vacuum_cleaner': 43, 'washer dryer': 44, 'water_pump': 45, 'wireless_phone_charger': 46}
 
-    def __init__(self, root, filename, dtype, timeframe: tuple, classes, transform=None, seq_len=100,
+    def __init__(self, root, filename, dtype, timeframe: tuple, classes : list, transform=None, seq_len=100,
                  synth_input=False, denoise_input=True, maximum_value=None, compand_input=False, high_precision_rms=False,
                  loading_scheme="seq2point"):
 
@@ -126,80 +129,224 @@ class NILM(Dataset):
 
     def __gen_datasets(self):
 
-        with self.load_h5() as h5file:
+        MetadataItem = namedtuple("MetadataItem", ["filepath", "metadata"])
 
-            site_meter = h5file[SITEMETER_KEY].power.active
-            site_meter = self.slice_by_datetime(site_meter, *self.timeframe)
+        aggregate_metadata = []
+        disaggregate_metadata = []
 
-            # Site meter resampled
-            site_meter = site_meter.resample('6s').mean()
+        # Orders source .parquet files into aggregate and disaggregates based on metadata
+        for file in os.listdir(self.raw_folder):
+            datafile = self.raw_folder / file
+            metadata = pl.read_parquet_metadata(datafile)
 
-            # Filter instance 1 of selected classes
-            # TODO: Support all classes and each instance
-            class_active_power = self.filter_classes(h5file)
-
-            # Slice each by specified date range
-            sliced_per_date = map(lambda x: NILM.slice_by_datetime(x, *self.timeframe), class_active_power)
-
-            # Sync datetime indices of appliance data to site meter and even out their lengths
-            synced_datetime_to_site_meter = NILM.sync_datetime_index(site_meter, sliced_per_date)
-
-            app_collection = []
-            rms_list = []
-            states_list = []
-
-            for idx, app_df in enumerate(tqdm(synced_datetime_to_site_meter, total=len(self.classes))):
-                device_info = h5file.get_storer(f"{self.classes[idx]}/instance_1").attrs.device_info
-
-                on_power_threshold = device_info["on_power_threshold"]
-                app_df = app_df.to_numpy().flatten()
-
-                app_collection.append(app_df)
-
-                filtered_df = NILM.quantile_filter(app_df, QUANTILE_FILTER_WINDOW[self.classes[idx]], p=50)
-                # filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
-
-                # normalized_df = minmax_scale(filtered_df, feature_range=(0, APPLIANCE_GLOBAL_MAX[self.classes[idx]]))
-                normalized_df = minmax_scale(filtered_df)
-
-                binarized_df = np.where(filtered_df >= on_power_threshold, 1, 0).astype(int)
-
-                rms_list.append(normalized_df)
-                states_list.append(binarized_df)
-
-            # Synthesize input or use site meter from dataset
-            if self.synth_input:
-                input_array = np.sum(app_collection, axis=0)
-            else:
-                input_array = np.array(site_meter)
-
-            # Filter data as is or apply noise then filter
-            if self.denoise_input:
-                mains = NILM.quantile_filter(input_array, self.seq_len)
+            if metadata.get("is_aggregate") == "true":
+                item = MetadataItem(filepath=datafile, metadata=metadata)
+                aggregate_metadata.append(item)
 
             else:
-                mains = input_array - np.percentile(input_array, 1)
-                mains = np.where(mains < input_array, input_array, mains)
-                mains = NILM.quantile_filter(mains, sequence_length=16, p=50)
+                metadata["on_power_threshold"] = float(metadata["on_power_threshold"])     
+                metadata["instance"] = int(metadata["instance"])
 
-            if self.maximum_value:
-                mains = np.clip(mains, a_min=0, a_max=self.maximum_value)
-                mains = minmax_scale(mains, feature_range=(0, self.maximum_value))
-            else:
-                mains = minmax_scale(mains)
+                item = MetadataItem(filepath=datafile, metadata=metadata)
+                disaggregate_metadata.append(item)
 
-            if self.compand_input:
-                mains = NILM.mu_law_compand(mains)
+        start_time = pl.datetime(self.timeframe[0].year, self.timeframe[0].month, self.timeframe[0].day)
+        stop_time = pl.datetime(self.timeframe[1].year, self.timeframe[1].month, self.timeframe[1].day)
 
-            self.input_array = mains
-            self.rms_array = np.vstack(rms_list).T
-            self.states_array = np.vstack(states_list).T
+        # TODO: aggregate_metadata may contain multiple signals if the source is polyphase
+        agg_info : MetadataItem = aggregate_metadata[0]
 
-            labels = self.states_array, self.rms_array
-            processed_data = self.input_array, labels
+        agg_data = pl.read_parquet(agg_info.filepath)
 
-            Path(self.processed_folder / self.dtype).mkdir(exist_ok=True)
-            torch.save(processed_data, self.processed_folder / self.dtype / self.data_file)
+        agg_data = agg_data.with_columns(
+            pl.col("time").dt.replace_time_zone(None)
+        )
+
+        agg_data = agg_data.filter((agg_data["time"] >= start_time) & (agg_data["time"] <= stop_time))
+
+        agg_data = agg_data.group_by_dynamic("time", every="6s").agg(pl.col("('power', 'active')").mean())
+
+        agg_data = agg_data.rename({"('power', 'active')": "signal"})
+
+        agg_synth_data = np.zeros(len(agg_data))
+        rms_data = np.zeros((len(agg_data), len(self.classes)))
+        states_data = np.zeros((len(agg_data), len(self.classes)))    
+
+        for disagg in tqdm(disaggregate_metadata):
+            # Load disaggregated signal from parquet file
+            disagg_sample = pl.read_parquet(disagg.filepath)
+            disagg_on_power_threshold = disagg.metadata.get("on_power_threshold")
+            disagg_appliance_type = disagg.metadata.get("type")
+
+            # Slice disaggregated signal
+            disagg_sample = disagg_sample.with_columns(
+                pl.col("time").dt.replace_time_zone(None)
+            )
+
+            disagg_sample = disagg_sample.filter((disagg_sample["time"] >= start_time) & (disagg_sample["time"] <= stop_time))
+
+            # Match disaggregate data with the downsampled aggregated data
+            matched_df = agg_data.join_asof(disagg_sample, on="time", strategy="nearest")
+            disagg_matched = matched_df.select(["time", "('power', 'active')"])
+            disagg_downsampled = disagg_matched.join(agg_data, on="time")
+            disagg_data = disagg_downsampled.select(["time", "('power', 'active')"]).rename({"('power', 'active')": "signal"})
+
+            # Align length of disaggregates to downsampled aggregated data 
+            disagg_data = np.resize(disagg_data["signal"].to_numpy(), (len(agg_data),))
+
+            # Clean data
+            disagg_data = np.nan_to_num(disagg_data)
+
+            # Aggregate data synthetically
+            agg_synth_data += disagg_data
+
+            # Define parameters for the quantile filter
+            quantile_filter_by_sequence_length = partial(NILM.quantile_filter,
+                                                         sequence_length=QUANTILE_FILTER_WINDOW[disagg_appliance_type])
+
+            # Define parameters for the binarizer
+            binarizer = lambda data: np.where(data >= disagg_on_power_threshold, 1, 0).astype(int)
+
+            # scaler = MinMaxScaler(feature_range=(0, 1))
+            scaler = FixedRangeScaler(min=0, max=APPLIANCE_GLOBAL_MAX[disagg_appliance_type], feature_range=(0, 1))
+
+            # Parallel processing of large chunks of data
+            data_filtered = chunked_numpy_processing(quantile_filter_by_sequence_length,
+                                                     disagg_data,
+                                                     chunk_size=100_000)
+
+            data_binarized = chunked_numpy_processing(binarizer,
+                                                      disagg_data,
+                                                      chunk_size=100_000)
+
+            data_norm = chunked_numpy_processing(scaler,
+                                                 data_filtered,
+                                                 chunk_size=100_000)
+
+            # Fill by index of class to prevent collision
+            class_idx = self.classes.index(disagg_appliance_type)
+            rms_data[:, class_idx] = data_norm
+            states_data[:, class_idx] = data_binarized
+
+            del disagg_data
+            del data_norm
+            del data_binarized
+            del data_filtered
+
+        # Synthesize input or use site meter from dataset
+        if self.synth_input:
+            input_array = agg_synth_data
+        else:
+            input_array = agg_data["signal"].to_numpy()
+
+        # Filter input data
+        quantile_filter_by_16 = partial(NILM.quantile_filter, sequence_length=16)
+        quantil_filter_by_seq_len = partial(NILM.quantile_filter, sequence_length=self.seq_len)
+        mains_scaler = FixedRangeScaler(min=0,
+                                        max=self.maximum_value if self.maximum_value else mains.max(),
+                                        feature_range=(0, 1))
+
+        # Filter data as is or apply noise then filter
+        if self.denoise_input:
+            mains = chunked_numpy_processing(quantil_filter_by_seq_len, mains, chunk_size=100_000)
+        else:
+            mains = input_array - np.percentile(input_array, 1)
+            mains = np.where(mains < input_array, input_array, mains)
+            mains = chunked_numpy_processing(quantile_filter_by_16, mains, chunk_size=100_000)
+
+        # Normalize input
+        mains = chunked_numpy_processing(mains_scaler, mains, chunk_size=100_000)
+
+        if self.compand_input:
+            mains = chunked_numpy_processing(NILM.mu_law_compand, mains, chunk_size=100_000)
+
+        # mains = np.clip(mains, a_min=0, a_max=1)
+
+        self.input_array = mains
+        self.rms_array = rms_data
+        self.states_array = states_data
+
+        processed_data = self.input_array, (self.states_array, self.rms_array)
+
+        Path(self.processed_folder / self.dtype).mkdir(exist_ok=True)
+        torch.save(processed_data, self.processed_folder / self.dtype / self.data_file)
+
+    # def __gen_datasets(self):
+
+    #     with self.load_h5() as h5file:
+
+    #         site_meter = h5file[SITEMETER_KEY].power.active
+    #         site_meter = self.slice_by_datetime(site_meter, *self.timeframe)
+
+    #         # Site meter resampled
+    #         site_meter = site_meter.resample('6s').mean()
+
+    #         # Filter instance 1 of selected classes
+    #         # TODO: Support all classes and each instance
+    #         class_active_power = self.filter_classes(h5file)
+
+    #         # Slice each by specified date range
+    #         sliced_per_date = map(lambda x: NILM.slice_by_datetime(x, *self.timeframe), class_active_power)
+
+    #         # Sync datetime indices of appliance data to site meter and even out their lengths
+    #         synced_datetime_to_site_meter = NILM.sync_datetime_index(site_meter, sliced_per_date)
+
+    #         app_collection = []
+    #         rms_list = []
+    #         states_list = []
+
+    #         for idx, app_df in enumerate(tqdm(synced_datetime_to_site_meter, total=len(self.classes))):
+    #             device_info = h5file.get_storer(f"{self.classes[idx]}/instance_1").attrs.device_info
+
+    #             on_power_threshold = device_info["on_power_threshold"]
+    #             app_df = app_df.to_numpy().flatten()
+
+    #             app_collection.append(app_df)
+
+    #             filtered_df = NILM.quantile_filter(app_df, QUANTILE_FILTER_WINDOW[self.classes[idx]], p=50)
+    #             # filtered_df = NILM.quantile_filter(app_df, self.seq_len, p=50)
+
+    #             # normalized_df = minmax_scale(filtered_df, feature_range=(0, APPLIANCE_GLOBAL_MAX[self.classes[idx]]))
+    #             normalized_df = minmax_scale(filtered_df)
+
+    #             binarized_df = np.where(filtered_df >= on_power_threshold, 1, 0).astype(int)
+
+    #             rms_list.append(normalized_df)
+    #             states_list.append(binarized_df)
+
+    #         # Synthesize input or use site meter from dataset
+    #         if self.synth_input:
+    #             input_array = np.sum(app_collection, axis=0)
+    #         else:
+    #             input_array = np.array(site_meter)
+
+    #         # Filter data as is or apply noise then filter
+    #         if self.denoise_input:
+    #             mains = NILM.quantile_filter(input_array, self.seq_len)
+
+    #         else:
+    #             mains = input_array - np.percentile(input_array, 1)
+    #             mains = np.where(mains < input_array, input_array, mains)
+    #             mains = NILM.quantile_filter(mains, sequence_length=16, p=50)
+
+    #         if self.maximum_value:
+    #             mains = np.clip(mains, a_min=0, a_max=self.maximum_value)
+    #             mains = minmax_scale(mains, feature_range=(0, self.maximum_value))
+    #         else:
+    #             mains = minmax_scale(mains)
+
+    #         if self.compand_input:
+    #             mains = NILM.mu_law_compand(mains)
+
+    #         self.input_array = mains
+    #         self.rms_array = np.vstack(rms_list).T
+    #         self.states_array = np.vstack(states_list).T
+
+    #         labels = self.states_array, self.rms_array
+    #         processed_data = self.input_array, labels
+
+    #         Path(self.processed_folder / self.dtype).mkdir(exist_ok=True)
+    #         torch.save(processed_data, self.processed_folder / self.dtype / self.data_file)
 
     def select_loading_scheme(self, loading_scheme) -> Sequence:
         """
@@ -325,10 +472,10 @@ def ukdale_seq2point_get_datasets(data, load_train=True, load_test=True):
     (data_dir, args) = data
 
     seq_len = 100
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -369,10 +516,10 @@ def ukdale_128_seq2point_get_datasets(data, load_train=True, load_test=True):
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -414,10 +561,10 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
     (data_dir, args) = data
 
     seq_len = 100
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -458,10 +605,10 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
     (data_dir, args) = data
 
     seq_len = 100
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -504,10 +651,10 @@ def ukdale_128_seq2point_aug_stratified_get_datasets(data, load_train=True, load
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -550,10 +697,10 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -599,10 +746,10 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -648,10 +795,10 @@ def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, 
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -692,16 +839,16 @@ def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, 
 def ukdale_128_seq2point_stratified_compand_wide_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=27)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=30)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
     MAXIMUM_VALUE = 4500
     (data_dir, args) = data
 
     seq_len = 128
-    # classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave",
+    # classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave",
     #            "television", "vacuum_cleaner", "toaster", "laptop_computer",
     #            "computer", "broadband_router", "charger"]
-    classes = ["fridge_freezer", "kettle", "washer_dryer", "dish_washer", "microwave"]
+    classes = ["fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"]
     transform = transforms.Compose([ai8x.normalize(args=args)])
 
     if load_train:
@@ -814,3 +961,6 @@ datasets = [
 		'loader' : ukdale_128_seq2point_stratified_compand_wide_get_datasets,
 	}
 ]
+
+if __name__ == "__main__":
+    ...
