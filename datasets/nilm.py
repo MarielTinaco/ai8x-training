@@ -8,14 +8,8 @@
 ###################################################################################################
 """
 """
-import ast
-import errno
 import os
-import pickle
-import random
-import sys
 import contextlib
-from abc import ABC
 from datetime import datetime
 from pathlib import Path
 from typing import Union, Iterable, Optional, Callable, Sequence
@@ -27,28 +21,28 @@ import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-import h5py
 import pandas as pd
 
 import ai8x
+from utils.nilm_utils import Sequence2Point, APPLIANCE_GLOBAL_DATA
 
 
 SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
-    "fridge_freezer" : 64,
-    "kettle" : 32,
-    "washer_dryer" : 64,
-    "dish_washer" : 16,
-    "microwave" : 32
+    "fridge_freezer" : APPLIANCE_GLOBAL_DATA[0]["filter_window"],
+    "kettle" : APPLIANCE_GLOBAL_DATA[1]["filter_window"],
+    "washer_dryer" : APPLIANCE_GLOBAL_DATA[2]["filter_window"],
+    "dish_washer" : APPLIANCE_GLOBAL_DATA[3]["filter_window"],
+    "microwave" : APPLIANCE_GLOBAL_DATA[4]["filter_window"]
 }
 
 APPLIANCE_GLOBAL_MAX = {
-    "fridge_freezer" : 259.0,
-    "kettle" : 2417.0,
-    "washer_dryer" : 2055.0,
-    "dish_washer" : 2439.0,
-    "microwave" : 1605.0
+    "fridge_freezer" : APPLIANCE_GLOBAL_DATA[0]["max"],
+    "kettle" : APPLIANCE_GLOBAL_DATA[1]["max"],
+    "washer_dryer" : APPLIANCE_GLOBAL_DATA[2]["max"],
+    "dish_washer" : APPLIANCE_GLOBAL_DATA[3]["max"],
+    "microwave" : APPLIANCE_GLOBAL_DATA[4]["max"]
 }
 
 class NILM(Dataset):
@@ -219,17 +213,11 @@ class NILM(Dataset):
                                   transform=self.transform,
                                   wide=bool(self.high_precision_rms))
         elif loading_scheme == "seq2point_stratified":
-            return Sequence2PointWithStratifiedSampling(self.input_array,
+            return Sequence2Point(self.input_array,
                                   (self.states_array,self.rms_array),
                                   sequence_length = self.seq_len,
+                                  stratified=True,
                                   transform=self.transform,
-                                  wide=bool(self.high_precision_rms))
-        elif loading_scheme == "seq2point_stratified_on_input":
-            return Sequence2PointWithStratifiedSampling(self.input_array,
-                                  (self.states_array,self.rms_array),
-                                  sequence_length = self.seq_len,
-                                  transform=self.transform,                                  
-                                  basis_vector="input",
                                   wide=bool(self.high_precision_rms))
         else:
             raise ValueError("Invalid Loading Scheme")
@@ -321,198 +309,6 @@ class NILM(Dataset):
 
     def __check_exists(self):
         return os.path.exists(os.path.join(self.processed_folder, self.dtype, self.data_file))
-
-
-class WindowSampler:
-
-    def __init__(self, data : np.ndarray,
-                 stride : Optional[Union[int, np.ndarray, Callable]] = None, 
-                 *args, **kwargs):
-        """
-        
-        Parameters
-        :param data:
-        :type  data: numpy array
-
-        Keyword arguments
-        :param length: Length of sequence along axis
-        :type  length: int
-        :param axis: Axis of traversal
-        :type  axis:
-        """
-
-        self._length = int(kwargs.get("length", 1))
-        self._axis = int(kwargs.get("axis", 0))
-
-        if len(data.shape) == 1:
-            self._axis = 0
-
-        indexable = data.shape[self._axis] - self._length
-
-        if isinstance(stride, int):
-            self.indices = np.arange(0, indexable, stride or 1)
-        elif isinstance(stride, np.ndarray):
-            self.indices = stride[stride < indexable]
-        elif isinstance(stride, Callable):
-            self.indices = stride(data)
-            self.indices = self.indices[self.indices < indexable]
-        else:
-            self.indices = np.arange(0, indexable, 1)
-
-        assert len(self.indices.shape) == 1, "Stride/Indexing must be 1D data"
-
-        self.data = data
-
-    def __len__(self):
-        return len(self.indices)
-
-    def __getitem__(self, index):
-        ptr = self.indices[index]
-        idx = [slice(None)]*self.data.ndim
-        idx[self._axis] = range(ptr, ptr+self.length)
-        return self.data[tuple(idx)]
-
-    @property
-    def length(self):
-        return self._length
-
-    @property
-    def axis(self):
-        return self._axis
-
-
-# # # # # # # # # # # # # # # # # # # # # # #
-#                                           #
-#           DATA LOADING SCHEMES            #
-#                                           #
-# # # # # # # # # # # # # # # # # # # # # # #
-
-class Sequence2Point(Sequence):
-    """
-    Implements Sequence Protocol
-    """
-    def __init__(self,
-                 data: Union[np.ndarray, Iterable],
-                 labels: Union[np.ndarray, Iterable],
-                 sequence_length : int,
-                 stride = 1,
-                 transform = None,
-                 wide=False):
-
-        self.seq_len = sequence_length
-        output_stride = lambda x: np.arange(sequence_length-1, labels[0].shape[0], stride)
-        self.input_sampler = WindowSampler(data=data, length=sequence_length, axis=0, stride=stride)
-        self.states_sampler = WindowSampler(data=labels[0], length=1, axis=0, stride= output_stride)
-        self.rms_sampler = WindowSampler(data=labels[1], length=1, axis=0, stride= output_stride)
-        self.transform = transform
-        self.wide = wide
-
-    def __len__(self):
-        return len(self.input_sampler)
-
-    def __getitem__(self, index):
-        if self.transform is None:
-            return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
-
-        inputs = self.input_sampler[index]
-        state = self.states_sampler[index]
-        power = self.rms_sampler[index]
-
-        # reshape to 2D
-        inputs = torch.tensor(inputs)
-        inp = inputs.reshape((-1, self.seq_len))
-        inp = inp.type(torch.FloatTensor)
-
-        power_ = torch.tensor(power)
-        power_ = power_.type(torch.FloatTensor)
-        power_ = power_.squeeze()
-
-        if not self.wide:
-            power_ = self.transform(power_)
-
-        return self.transform(inp), \
-			(torch.tensor(state).long().squeeze(), power_)
-
-
-class Sequence2PointWithStratifiedSampling:
-
-    def __init__(self,
-                 data: Union[np.ndarray, Iterable],
-                 labels: Union[np.ndarray, Iterable],
-                 sequence_length : int,
-                 transform=None,
-                 basis_vector=None,
-                 wide=False):
-
-        self.seq_len = sequence_length
-        self.transform = transform
-        self.basis_vector = basis_vector
-        self.wide = wide
-        if self.basis_vector == "input":
-            stride = lambda _: self.activity_determined_indices(data, sequence_length=sequence_length)
-            output_stride = lambda _: self.activity_determined_indices(data, sequence_length=sequence_length) + sequence_length
-        else:
-            stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length)
-            output_stride = lambda _: self.activity_determined_indices(labels[0], sequence_length=sequence_length) + sequence_length
-
-        self.input_sampler = WindowSampler(data=data, length=sequence_length, axis=0, stride=stride)
-        self.states_sampler = WindowSampler(data=labels[0], length=1, axis=0, stride= output_stride)
-        self.rms_sampler = WindowSampler(data=labels[1], length=1, axis=0, stride= output_stride)
-
-    def __len__(self):
-        return len(self.input_sampler)
-
-    def __getitem__(self, index):
-        if self.transform is None:
-            return self.input_sampler[index], (self.states_sampler[index], self.rms_sampler[index])
-
-        inputs = self.input_sampler[index]
-        state = self.states_sampler[index]
-        power = self.rms_sampler[index]
-
-        # reshape to 2D
-        inputs = torch.tensor(inputs)
-        inp = inputs.reshape((-1, self.seq_len))
-        inp = inp.type(torch.FloatTensor)
-
-        power_ = torch.tensor(power)
-        power_ = power_.type(torch.FloatTensor)
-        power_ = power_.squeeze()
-
-        if not self.wide:
-            power_ = self.transform(power_)
-
-        return self.transform(inp), \
-			(torch.tensor(state).long().squeeze(), power_)
-
-    def activity_determined_indices(self, activation_states, sequence_length):
-        """
-
-        """
-        if self.basis_vector == "input":
-            activity = activation_states
-        else:
-            # Aggregate activations states of each appliance for any given time to determing any activity
-            activity = np.apply_along_axis(lambda x: int(any(x)), 1, activation_states)
-
-        # Make sure there is only a single stream of data to determine activity
-        assert len(activity.shape) == 1, "Aggregate activation state must be in 1 dimension to proceed"
-
-        indices_with_detected_activity = set([])
-        for idx, state in enumerate(activity):
-            if state > 0:
-                # Add an additional element to include full zero activation states
-                start_index = idx - (sequence_length + 1)
-                if start_index < 0:
-                    continue
-                
-                limiter = idx + sequence_length
-                if limiter >= len(activity):
-                    break
-
-                index_active = np.arange(max(0, start_index), idx, 1)
-                indices_with_detected_activity.update(index_active)
-        return np.sort(np.fromiter(indices_with_detected_activity, dtype=int))
 
 
 # # # # # # # # # # # # # # # # # # # # #
@@ -678,7 +474,7 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
                              seq_len=seq_len,
                              synth_input=True,
                              denoise_input=True,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 
@@ -692,7 +488,7 @@ def ukdale_seq2point_stratified_get_datasets(data, load_train=True, load_test=Tr
                             seq_len=seq_len,
                             synth_input=True,
                             denoise_input=True,
-                            loading_scheme="seq2point_stratified_on_input")
+                            loading_scheme="seq2point_stratified")
     else:
         test_dataset = None
 
@@ -724,7 +520,7 @@ def ukdale_128_seq2point_aug_stratified_get_datasets(data, load_train=True, load
                              seq_len=seq_len,
                              synth_input=True,
                              denoise_input=True,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 
@@ -771,7 +567,7 @@ def ukdale_128_seq2point_stratified_get_datasets(data, load_train=True, load_tes
                              synth_input=True,
                              denoise_input=False,
                              maximum_value=MAXIMUM_VALUE,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 
@@ -821,7 +617,7 @@ def ukdale_128_seq2point_stratified_crossval_get_datasets(data, load_train=True,
                              denoise_input=False,
                              maximum_value=MAXIMUM_VALUE,
                              compand_input=True,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 
@@ -870,7 +666,7 @@ def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, 
                              denoise_input=False,
                              maximum_value=MAXIMUM_VALUE,
                              compand_input=True,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 
@@ -921,7 +717,7 @@ def ukdale_128_seq2point_stratified_compand_wide_get_datasets(data, load_train=T
                              maximum_value=MAXIMUM_VALUE,
                              compand_input=True,
                              high_precision_rms=True,
-                             loading_scheme="seq2point_stratified_on_input")
+                             loading_scheme="seq2point_stratified")
     else:
         train_dataset = None
 

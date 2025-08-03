@@ -113,9 +113,9 @@ import yamlwriter
 from losses.dummyloss import DummyLoss
 from losses.multiboxloss import MultiBoxLoss
 from losses.nilmmultitargetloss import CustomNILMLoss
-from metrics.nilm import CustomNILMRegressionMetrics
 from nas import parse_nas_yaml
 from utils import kd_relationbased, model_wrapper, object_detection_utils, parse_obj_detection_yaml
+from utils.nilm_utils import CustomNILMRegressionMetrics
 
 matplotlib.use("pgf")
 
