@@ -869,7 +869,7 @@ def train(train_loader, model, criterion, optimizer, epoch,
 
     if not args.regression:
         if (args.nilm and args.multitarget):
-            classerr = CustomNILMRegressionMetrics(num_classes=5)
+            classerr = CustomNILMRegressionMetrics(output_classes=args.labels)
         else:
             classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1152,7 +1152,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
         ).to(args.device)
         mAP = 0.00
     if (args.nilm and args.multitarget):
-        classerr = CustomNILMRegressionMetrics(num_classes=5)
+        classerr = CustomNILMRegressionMetrics(output_classes=args.labels)
     elif not args.regression:
         classerr = tnt.ClassErrorMeter(accuracy=True, topk=(1, min(args.num_classes, 5)))
     else:
@@ -1419,7 +1419,7 @@ def _validate(data_loader, model, criterion, loggers, args, epoch=-1, tflogger=N
 
         msglogger.info('==> Regression Metrics per Appliance')
         for key, value in classerr.value()["apps"].items():
-            msglogger.info(f"==> {key}:\t{' '.join([str(v) for v in value])}")
+            msglogger.info(f"==> {key}:\t{' '.join([str(f'{v:.5f}') for v in value])}")
 
         # msglogger.info('==> MSE: %.3f       Loss: %.3f\n',
         #                     classerr.value()["mse"], losses[OBJECTIVE_LOSS_KEY].mean)

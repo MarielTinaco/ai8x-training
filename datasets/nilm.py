@@ -33,21 +33,21 @@ from utils.nilm_utils import Sequence2Point, FixedRangeScaler, APPLIANCE_GLOBAL_
 SITEMETER_KEY = "/site_meter/instance_1"
 
 QUANTILE_FILTER_WINDOW = {
-    "fridge freezer" : APPLIANCE_GLOBAL_DATA[0]["filter_window"],
-    "kettle" : APPLIANCE_GLOBAL_DATA[1]["filter_window"],
-    "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["filter_window"],
-    "dish washer" : APPLIANCE_GLOBAL_DATA[3]["filter_window"],
-    "microwave" : APPLIANCE_GLOBAL_DATA[4]["filter_window"],
-    "television" : APPLIANCE_GLOBAL_DATA[5]["filter_window"],
+    "fridge freezer" : APPLIANCE_GLOBAL_DATA["fridge freezer"]["filter_window"],
+    "kettle" : APPLIANCE_GLOBAL_DATA["kettle"]["filter_window"],
+    "washer dryer" : APPLIANCE_GLOBAL_DATA["washer dryer"]["filter_window"],
+    "dish washer" : APPLIANCE_GLOBAL_DATA["dish washer"]["filter_window"],
+    "microwave" : APPLIANCE_GLOBAL_DATA["microwave"]["filter_window"],
+    "television" : APPLIANCE_GLOBAL_DATA["television"]["filter_window"],
 }
 
 APPLIANCE_GLOBAL_MAX = {
-    "fridge freezer" : APPLIANCE_GLOBAL_DATA[0]["max"],
-    "kettle" : APPLIANCE_GLOBAL_DATA[1]["max"],
-    "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["max"],
-    "dish washer" : APPLIANCE_GLOBAL_DATA[3]["max"],
-    "microwave" : APPLIANCE_GLOBAL_DATA[4]["max"],
-    "television" : APPLIANCE_GLOBAL_DATA[5]["max"],
+    "fridge freezer" : APPLIANCE_GLOBAL_DATA["fridge freezer"]["max"],
+    "kettle" : APPLIANCE_GLOBAL_DATA["kettle"]["max"],
+    "washer dryer" : APPLIANCE_GLOBAL_DATA["washer dryer"]["max"],
+    "dish washer" : APPLIANCE_GLOBAL_DATA["dish washer"]["max"],
+    "microwave" : APPLIANCE_GLOBAL_DATA["microwave"]["max"],
+    "television" : APPLIANCE_GLOBAL_DATA["television"]["max"],
 }
 
 class NILM(Dataset):
@@ -846,8 +846,8 @@ def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, 
 def ukdale_128_seq2point_stratified_compand_wide_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=9, day=30)
-    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=3, day=30)
+    TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=4, day=30)
     MAXIMUM_VALUE = 4500
     (data_dir, args) = data
 
@@ -899,7 +899,7 @@ datasets = [
 		'name' : 'UKDALE',
 		'input' : (1, 100),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (0.00625, 1),
 		'loader' : ukdale_seq2point_get_datasets,
 	},
@@ -907,7 +907,7 @@ datasets = [
 		'name' : 'UKDALE_128',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (0.00625, 1),
 		'loader' : ukdale_128_seq2point_get_datasets,
 	},
@@ -915,7 +915,7 @@ datasets = [
 		'name' : 'UKDALE_stratified',
 		'input' : (1, 100),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (0.0625, 1),
 		'loader' : ukdale_seq2point_stratified_get_datasets,
 	},
@@ -923,7 +923,7 @@ datasets = [
 		'name' : 'UKDALE_stratified_on_input',
 		'input' : (1, 100),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (0.0625, 1),
 		'loader' : ukdale_seq2point_stratified_get_datasets,
 	},
@@ -931,7 +931,7 @@ datasets = [
 		'name' : 'UKDALE_128_stratified',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_get_datasets,
 	},
@@ -939,7 +939,7 @@ datasets = [
 		'name' : 'UKDALE_128_stratified_aug',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_aug_stratified_get_datasets,
 	},
@@ -947,7 +947,7 @@ datasets = [
 		'name' : 'UKDALE_128_stratified_crossval',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_crossval_get_datasets,
 	},
@@ -955,7 +955,7 @@ datasets = [
 		'name' : 'UKDALE_128_stratified_compand',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_compand_get_datasets,
 	},
@@ -963,7 +963,7 @@ datasets = [
 		'name' : 'UKDALE_128_stratified_compand_wide',
 		'input' : (1, 128),
 		# 'output' : (21, 26, 44, 15, 30, 39, 43, 41, 28, 12, 8, 9),
-		'output' : (21, 26, 44, 15, 30),
+		'output' : ("fridge freezer", "kettle", "washer dryer", "dish washer", "microwave"),
 		'weight' : (1, 1),
 		'loader' : ukdale_128_seq2point_stratified_compand_wide_get_datasets,
 	}

@@ -9,65 +9,59 @@ from torch import nn
 from sklearn.preprocessing import minmax_scale
 
 
-APPLIANCE_GLOBAL_DATA = [
-    {
-        "type": "fridge",
+APPLIANCE_GLOBAL_DATA = {
+    "fridge freezer" : {
         "window": 50,
         "min": 0.0,
         "max": 259.0,
         "on_power_threshold": 50,
         "filter_window": 64
     },
-    {
-        "type":"kettle",
+    "kettle" : {
         "window": 50,
         "min": 0.0,
         "max": 2417.0,
         "on_power_threshold": 10,
         "filter_window": 8
     },
-    {
-        "type":"washer dryer",
+    "washer dryer" : {
         "window": 50,
         "min": 0.0,
         "max": 2055.0,
         "on_power_threshold": 20,
         "filter_window": 64
     },
-    {
-        "type":"dish washer",
+    "dish washer" : {
         "window": 10,
         "min": 0.0,
         "max": 2439.0,
         "on_power_threshold": 10,
         "filter_window": 16
     },
-    {
-        "type":"microwave",
+    "microwave" : {
         "window": 50,
         "min": 0.0,
         "max": 1605.0,
         "on_power_threshold": 200,
         "filter_window": 32
     },
-    {
-        "type":"television",
+    "television" : {
         "window": 50,
         "min": 0.0,
         "max": 2500.0,
         "on_power_threshold": 200,
         "filter_window": 8
-    },
-
-]
+    }
+}
 
 
 class CustomNILMRegressionMetrics:
 
-    def __init__(self, num_classes, *args, **kwargs):
+    def __init__(self, output_classes, *args, **kwargs):
         self.softmax = nn.Softmax(dim=1)
         self.mse_meter = tnt.MSEMeter()
-        self.num_classes = num_classes
+        self.output_classes = output_classes
+        self.num_classes = len(output_classes)
 
         self.reset()
         self.appliance_data = APPLIANCE_GLOBAL_DATA
@@ -183,10 +177,10 @@ class CustomNILMRegressionMetrics:
         power = torch.cat([x['power'] for x in self.outputs], 0).cpu().numpy()
         state = torch.cat([x['state'] for x in self.outputs], 0).cpu().numpy().astype(np.int32)
 
-        for idx, app_data in enumerate(self.appliance_data):
-            power[:,idx] = minmax_scale(power[:,idx], (app_data["min"], app_data["max"]))
+        for idx, output_class in enumerate(self.output_classes):
+            power[:,idx] = minmax_scale(power[:,idx], (APPLIANCE_GLOBAL_DATA[output_class]["min"], APPLIANCE_GLOBAL_DATA[output_class]["max"]))
             pred_power[:,:,idx] = np.clip(pred_power[:,:,idx], 0, 1)
-            pred_power[:,:,idx] = minmax_scale(pred_power[:,:,idx], (app_data["min"], app_data["max"]))
+            pred_power[:,:,idx] = minmax_scale(pred_power[:,:,idx], (APPLIANCE_GLOBAL_DATA[output_class]["min"], APPLIANCE_GLOBAL_DATA[output_class]["max"]))
 
         y_pred = pred_power[:,2]
 
