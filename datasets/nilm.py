@@ -37,7 +37,8 @@ QUANTILE_FILTER_WINDOW = {
     "kettle" : APPLIANCE_GLOBAL_DATA[1]["filter_window"],
     "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["filter_window"],
     "dish washer" : APPLIANCE_GLOBAL_DATA[3]["filter_window"],
-    "microwave" : APPLIANCE_GLOBAL_DATA[4]["filter_window"]
+    "microwave" : APPLIANCE_GLOBAL_DATA[4]["filter_window"],
+    "television" : APPLIANCE_GLOBAL_DATA[5]["filter_window"],
 }
 
 APPLIANCE_GLOBAL_MAX = {
@@ -45,7 +46,8 @@ APPLIANCE_GLOBAL_MAX = {
     "kettle" : APPLIANCE_GLOBAL_DATA[1]["max"],
     "washer dryer" : APPLIANCE_GLOBAL_DATA[2]["max"],
     "dish washer" : APPLIANCE_GLOBAL_DATA[3]["max"],
-    "microwave" : APPLIANCE_GLOBAL_DATA[4]["max"]
+    "microwave" : APPLIANCE_GLOBAL_DATA[4]["max"],
+    "television" : APPLIANCE_GLOBAL_DATA[5]["max"],
 }
 
 class NILM(Dataset):
@@ -147,6 +149,10 @@ class NILM(Dataset):
                 metadata["on_power_threshold"] = float(metadata["on_power_threshold"])     
                 metadata["instance"] = int(metadata["instance"])
 
+                # Get all instance 1's of the appliances
+                if metadata["instance"] != 1:
+                    continue
+
                 item = MetadataItem(filepath=datafile, metadata=metadata)
                 disaggregate_metadata.append(item)
 
@@ -197,7 +203,7 @@ class NILM(Dataset):
             # Clean data
             disagg_data = np.nan_to_num(disagg_data)
 
-            # Aggregate data synthetically
+            # Aggregate data synthetically both target appliances and noise
             agg_synth_data += disagg_data
 
             # Define parameters for the quantile filter
@@ -223,10 +229,11 @@ class NILM(Dataset):
                                                  data_filtered,
                                                  chunk_size=100_000)
 
-            # Fill by index of class to prevent collision
-            class_idx = self.classes.index(disagg_appliance_type)
-            rms_data[:, class_idx] = data_norm
-            states_data[:, class_idx] = data_binarized
+            if disagg_appliance_type in self.classes:
+                # Fill by index of class to prevent collision
+                class_idx = self.classes.index(disagg_appliance_type)
+                rms_data[:, class_idx] = data_norm
+                states_data[:, class_idx] = data_binarized
 
             del disagg_data
             del data_norm
@@ -839,7 +846,7 @@ def ukdale_128_seq2point_stratified_compand_get_datasets(data, load_train=True, 
 def ukdale_128_seq2point_stratified_compand_wide_get_datasets(data, load_train=True, load_test=True):
 
     UKDALE_SOURCE = "ukdale_bldg1_20121109_20170426.h5"
-    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=8, day=30)
+    TRAIN_TIMEFRAME = datetime(year=2014, month=3, day=25), datetime(year=2014, month=9, day=30)
     TEST_TIMEFRAME = datetime(year=2015, month=4, day=27), datetime(year=2015, month=7, day=30)
     MAXIMUM_VALUE = 4500
     (data_dir, args) = data

@@ -49,7 +49,16 @@ APPLIANCE_GLOBAL_DATA = [
         "max": 1605.0,
         "on_power_threshold": 200,
         "filter_window": 32
-    }
+    },
+    {
+        "type":"television",
+        "window": 50,
+        "min": 0.0,
+        "max": 2500.0,
+        "on_power_threshold": 200,
+        "filter_window": 8
+    },
+
 ]
 
 
